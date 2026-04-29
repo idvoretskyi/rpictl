@@ -12,7 +12,7 @@ Provisioning CLI for Raspberry Pi single-node k3s clusters.
 
 ## Status
 
-**v0.1.0 — alpha.** Core provisioning flow is complete and working. Configuration schema and CLI flags may change in minor versions until v1.0.0.
+**v0.1.0-alpha.1 — pre-hardware-test alpha.** Core provisioning flow is complete and CI-green. Not yet validated on physical hardware. Configuration schema and CLI flags may change until v1.0.0.
 
 Tested on: Raspberry Pi 3B, 3B+ (aarch64, RPi OS Lite Trixie).
 Best-effort defaults for RPi 4 and 5 — contributions and test reports welcome.
@@ -31,7 +31,7 @@ It stops at "kubeconfig in your hand." GitOps, secrets, ingress, and multi-node 
 
 ## Supported devices
 
-| Device | Profile | Tested in v0.1.0 |
+| Device | Profile | Tested in v0.1.0-alpha.1 |
 |---|---|---|
 | Raspberry Pi 3B | `rpi3` | Yes |
 | Raspberry Pi 3B+ | `rpi3b-plus` | Yes |
