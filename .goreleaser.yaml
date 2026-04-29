@@ -23,17 +23,17 @@ builds:
 
 archives:
   - id: rpictl
-    builds: [rpictl]
+    ids: [rpictl]
     name_template: "rpictl_{{.Os}}_{{.Arch}}"
-    format: tar.gz
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
   - id: rpictl-agent
-    builds: [rpictl-agent]
+    ids: [rpictl-agent]
     name_template: "rpictl-agent_{{.Os}}_{{.Arch}}"
-    format: tar.gz
+    formats: [tar.gz]
 
 checksum:
   name_template: "checksums.txt"
