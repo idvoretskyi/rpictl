@@ -35,7 +35,7 @@ func (c *Client) Upload(localPath, remotePath string) error {
 	if err != nil {
 		return fmt.Errorf("open %s: %w", localPath, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	fi, err := f.Stat()
 	if err != nil {
@@ -55,7 +55,7 @@ func (c *Client) UploadBytes(data []byte, remotePath string, mode os.FileMode) e
 	if err != nil {
 		return fmt.Errorf("new session: %w", err)
 	}
-	defer sess.Close()
+	defer func() { _ = sess.Close() }()
 
 	sess.Stdin = newBytesReader(data)
 	cmd := fmt.Sprintf("cat > %s && chmod %04o %s", remotePath, mode, remotePath)

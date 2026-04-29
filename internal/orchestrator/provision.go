@@ -53,7 +53,7 @@ func Provision(hostName string, host *config.Host, agentBinary []byte, force boo
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	fmt.Printf("  Connected.\n\n")
 
 	// Upload agent
@@ -299,7 +299,7 @@ func FetchKubeconfig(hostName string, host *config.Host) error {
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := kubeconfig.Fetch(client, host.Address, host.Kubeconfig.Context, host.Kubeconfig.Output); err != nil {
 		return err

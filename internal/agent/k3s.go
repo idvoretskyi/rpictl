@@ -60,7 +60,7 @@ func RunK3s(input StepInput) (*Result, error) {
 	if err := os.WriteFile(tmpFile, []byte(installer), 0755); err != nil {
 		return nil, fmt.Errorf("write installer: %w", err)
 	}
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	// Build INSTALL_K3S_EXEC
 	execParts := append(disableFlags, kubeletFlags...)

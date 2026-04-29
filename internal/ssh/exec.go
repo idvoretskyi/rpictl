@@ -36,7 +36,7 @@ func (c *Client) Exec(cmd string) (*ExecResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new session: %w", err)
 	}
-	defer sess.Close()
+	defer func() { _ = sess.Close() }()
 
 	var stdout, stderr bytes.Buffer
 	sess.Stdout = &stdout
