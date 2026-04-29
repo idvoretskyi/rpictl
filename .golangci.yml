@@ -6,7 +6,6 @@ linters:
     - govet
     - staticcheck
     - ineffassign
-    - typecheck
 
 issues:
   exclude-rules:
