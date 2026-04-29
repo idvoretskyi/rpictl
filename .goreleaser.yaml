@@ -50,18 +50,19 @@ release:
   prerelease: auto
   name_template: "{{.Tag}}"
 
-brews:
-  - ids: [rpictl]
-    repository:
-      owner: idvoretskyi
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    skip: "{{ if .Env.HOMEBREW_TAP_GITHUB_TOKEN }}false{{ else }}true{{ end }}"
-    name: rpictl
-    homepage: "https://github.com/idvoretskyi/rpictl"
-    description: "Provisioning CLI for Raspberry Pi single-node k3s clusters"
-    license: "Apache-2.0"
-    install: |
-      bin.install "rpictl"
-    test: |
-      system "#{bin}/rpictl version"
+# Homebrew tap formula — requires HOMEBREW_TAP_GITHUB_TOKEN secret in repo settings.
+# Uncomment after configuring the secret:
+# brews:
+#   - ids: [rpictl]
+#     repository:
+#       owner: idvoretskyi
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+#     name: rpictl
+#     homepage: "https://github.com/idvoretskyi/rpictl"
+#     description: "Provisioning CLI for Raspberry Pi single-node k3s clusters"
+#     license: "Apache-2.0"
+#     install: |
+#       bin.install "rpictl"
+#     test: |
+#       system "#{bin}/rpictl version"
