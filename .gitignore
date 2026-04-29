@@ -1,7 +1,7 @@
 # Binaries
 /dist/
-rpictl
-rpictl-agent
+/rpictl
+/rpictl-agent
 
 # Go
 *.test
