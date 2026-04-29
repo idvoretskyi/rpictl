@@ -23,5 +23,5 @@ coverage.txt
 *.key
 age.key
 
-# rpictl local config (use examples/rpictl.yaml as template)
-rpictl.yaml
+# Local rpictl config (use examples/rpictl.yaml as template)
+/rpictl.yaml

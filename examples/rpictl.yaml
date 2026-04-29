@@ -1,0 +1,46 @@
+hosts:
+  # Example: Raspberry Pi 3B+ running RPi OS Lite, Debian 13 Trixie
+  rpi3:
+    address: raspberrypi.local      # hostname or IP
+    user: pi
+    ssh_key: ~/.ssh/id_ed25519      # omit to use ssh-agent
+    timezone: UTC
+    device_profile: rpi3b-plus      # rpi3 | rpi3b-plus | rpi4 | rpi5 | auto (default)
+
+    # Override profile defaults (all optional):
+    swap:
+      zram_percent: 50              # 0 to disable zram
+      swappiness: 60
+    gpu_mem: 16                     # MB; set 0 to skip (Pi 5 ignores this)
+
+    k3s:
+      version: v1.31.4+k3s1
+      disable:
+        - traefik
+        - servicelb
+        - metrics-server
+      kubelet_args:
+        - eviction-hard=memory.available<100Mi
+
+    hardening:
+      ssh:
+        password_auth: false
+        permit_root_login: false
+      ufw:
+        enabled: true
+        allow_ssh_from:
+          - 192.168.0.0/16          # restrict SSH to local network
+      unattended_upgrades: true
+
+    kubeconfig:
+      output: ~/.kube/rpi3.yaml     # where to write kubeconfig on laptop
+      context: rpi3                 # kubectl context name
+
+  # Example: Raspberry Pi 4 (4GB) — untested profile, best-effort defaults
+  # rpi4:
+  #   address: raspberrypi.local
+  #   user: pi
+  #   device_profile: rpi4
+  #   kubeconfig:
+  #     output: ~/.kube/rpi4.yaml
+  #     context: rpi4

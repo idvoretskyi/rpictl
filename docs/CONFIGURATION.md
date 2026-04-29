@@ -9,7 +9,7 @@ Override with `--config / -c`.
 hosts:
   <host-name>:
     # Required
-    address: rpi3.local           # hostname or IP of the Pi
+    address: raspberrypi.local    # hostname or IP of the Pi
     user: pi                      # SSH user
 
     # Optional
@@ -67,7 +67,7 @@ Any field set explicitly in the config overrides the profile default.
 ```yaml
 hosts:
   rpi3:
-    address: rpi3.local
+    address: raspberrypi.local
     user: pi
 ```
 

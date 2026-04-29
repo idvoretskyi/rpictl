@@ -36,7 +36,7 @@ go install github.com/idvoretskyi/rpictl/cmd/rpictl@latest
 ```yaml
 hosts:
   rpi3:
-    address: rpi3.local
+    address: raspberrypi.local
     user: pi
     device_profile: rpi3b-plus
     kubeconfig:
