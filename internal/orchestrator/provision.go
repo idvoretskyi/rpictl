@@ -49,7 +49,7 @@ func Provision(hostName string, host *config.Host, agentBinary []byte, force boo
 
 	// Connect
 	fmt.Printf("  Connecting to %s ...\n", host.Address)
-	client, err := internalssh.Connect(host.Address, host.User, host.SSHKey)
+	client, err := internalssh.Connect(host.Address, host.User, host.SSHKey, host.KnownHostsFile, *host.StrictHostKey)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
@@ -295,7 +295,7 @@ func detectRemoteProfile(client *internalssh.Client) (string, error) {
 func FetchKubeconfig(hostName string, host *config.Host) error {
 	fmt.Printf("Fetching kubeconfig for host %q (%s@%s)\n", hostName, host.User, host.Address)
 
-	client, err := internalssh.Connect(host.Address, host.User, host.SSHKey)
+	client, err := internalssh.Connect(host.Address, host.User, host.SSHKey, host.KnownHostsFile, *host.StrictHostKey)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}

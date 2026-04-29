@@ -76,7 +76,7 @@ func RunPreflight(input StepInput) (*Result, error) {
 }
 
 func readFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- reads system files at known paths
 	if err != nil {
 		return "", err
 	}

@@ -11,7 +11,6 @@ package agent
 import (
 	"fmt"
 	"os"
-	"strings"
 )
 
 const sshdConfig = `/etc/ssh/sshd_config.d/rpictl-hardening.conf`
@@ -34,7 +33,7 @@ func RunHardening(input StepInput) (*Result, error) {
 	}
 
 	sshdContent := fmt.Sprintf("PasswordAuthentication %s\nPermitRootLogin %s\n", passwdVal, rootVal)
-	if err := os.WriteFile(sshdConfig, []byte(sshdContent), 0644); err != nil {
+	if err := os.WriteFile(sshdConfig, []byte(sshdContent), 0600); err != nil { // tightened: sshd reads as root; 0600 is safer
 		return nil, fmt.Errorf("write sshd config: %w", err)
 	}
 	if _, err := runCommand("systemctl", "reload", "ssh"); err != nil {
@@ -89,13 +88,12 @@ func RunHardening(input StepInput) (*Result, error) {
 		conf := `APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 `
-		if err := os.WriteFile("/etc/apt/apt.conf.d/20auto-upgrades", []byte(conf), 0644); err != nil {
+		if err := os.WriteFile("/etc/apt/apt.conf.d/20auto-upgrades", []byte(conf), 0644); err != nil { // #nosec G306 -- apt convention requires world-readable conf.d files
 			return nil, fmt.Errorf("write auto-upgrades config: %w", err)
 		}
 		result.Changed = append(result.Changed, "unattended-upgrades")
 		result.Messages = append(result.Messages, "unattended-upgrades enabled")
 	}
 
-	_ = strings.TrimSpace // suppress unused import
 	return result, nil
 }

@@ -14,6 +14,8 @@ hosts:
 
     # Optional
     ssh_key: ~/.ssh/id_ed25519    # SSH private key; omit to use ssh-agent
+    known_hosts_file: ~/.ssh/known_hosts  # SSH known_hosts for host-key verification
+    strict_host_key: false        # false = TOFU (default); true = reject unknown hosts
     timezone: UTC                 # IANA timezone (default: UTC)
     device_profile: auto          # rpi3 | rpi3b-plus | rpi4 | rpi5 | auto
 
@@ -72,3 +74,27 @@ hosts:
 ```
 
 All other fields use sensible defaults.
+
+## SSH host-key verification
+
+rpictl verifies the Pi's SSH host key to protect against MITM attacks.
+
+| `strict_host_key` | Behaviour |
+|---|---|
+| `false` (default) | **Trust On First Use (TOFU)**: on the first connection the host key is accepted and saved to `known_hosts_file`. Subsequent connections enforce the saved key. A mismatch is always rejected. |
+| `true` | **Strict**: the host must already be present in `known_hosts_file`. Unknown hosts are rejected with a `ssh-keyscan` hint. |
+
+The default is `false` (TOFU) because rpictl is a bootstrap tool used over a trusted local network where physical access to the Pi means TOFU is appropriate.
+
+To pre-populate known_hosts before running in strict mode:
+
+```bash
+ssh-keyscan -H raspberrypi.local >> ~/.ssh/known_hosts
+```
+
+If the Pi is reinstalled and its host key changes, remove the stale entry:
+
+```bash
+ssh-keygen -R raspberrypi.local -f ~/.ssh/known_hosts
+```
+

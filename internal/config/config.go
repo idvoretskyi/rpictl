@@ -34,6 +34,14 @@ type Host struct {
 	Address       string      `yaml:"address"        validate:"required"`
 	User          string      `yaml:"user"           validate:"required"`
 	SSHKey        string      `yaml:"ssh_key"`
+	// KnownHostsFile is the path to the SSH known_hosts file used for host-key
+	// verification. Defaults to ~/.ssh/known_hosts. Tilde is expanded.
+	KnownHostsFile string `yaml:"known_hosts_file"`
+	// StrictHostKey controls SSH host-key verification behaviour.
+	// false (default): Trust On First Use — accept and persist an unknown host
+	// key on the first connection; reject mismatches on subsequent connections.
+	// true: reject any host not already present in known_hosts.
+	StrictHostKey *bool       `yaml:"strict_host_key"`
 	Timezone      string      `yaml:"timezone"`
 	DeviceProfile string      `yaml:"device_profile"` // rpi3 | rpi3b-plus | rpi4 | rpi5 | auto
 	Swap          SwapConfig  `yaml:"swap"`
@@ -94,7 +102,7 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("expand path: %w", err)
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- config path is a CLI input under user's control
 	if err != nil {
 		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
@@ -150,6 +158,15 @@ func applyDefaults(name string, h *Host) error {
 		applyProfileDefaults(h, &p)
 	}
 
+	// Default SSH host-key mode
+	if h.StrictHostKey == nil {
+		f := false
+		h.StrictHostKey = &f
+	}
+	if h.KnownHostsFile == "" {
+		h.KnownHostsFile = "~/.ssh/known_hosts"
+	}
+
 	// Default timezone
 	if h.Timezone == "" {
 		h.Timezone = "UTC"
@@ -178,13 +195,20 @@ func applyDefaults(name string, h *Host) error {
 		h.Kubeconfig.Context = name
 	}
 
-	// Expand ~ in ssh_key and kubeconfig output
+	// Expand ~ in ssh_key, known_hosts_file, and kubeconfig output
 	if h.SSHKey != "" {
 		expanded, err := expandHome(h.SSHKey)
 		if err != nil {
 			return fmt.Errorf("expand ssh_key: %w", err)
 		}
 		h.SSHKey = expanded
+	}
+	if h.KnownHostsFile != "" {
+		expanded, err := expandHome(h.KnownHostsFile)
+		if err != nil {
+			return fmt.Errorf("expand known_hosts_file: %w", err)
+		}
+		h.KnownHostsFile = expanded
 	}
 	expanded, err := expandHome(h.Kubeconfig.Output)
 	if err != nil {

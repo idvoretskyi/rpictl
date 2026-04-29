@@ -31,7 +31,7 @@ func (c *Client) Upload(localPath, remotePath string) error {
 	}
 	defer scpClient.Close()
 
-	f, err := os.Open(localPath)
+	f, err := os.Open(localPath) // #nosec G304 -- localPath is a CLI/config input under user's control
 	if err != nil {
 		return fmt.Errorf("open %s: %w", localPath, err)
 	}
