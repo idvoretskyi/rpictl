@@ -1,8 +1,33 @@
 # rpictl
 
+[![CI](https://github.com/idvoretskyi/rpictl/actions/workflows/ci.yml/badge.svg)](https://github.com/idvoretskyi/rpictl/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/idvoretskyi/rpictl?sort=semver)](https://github.com/idvoretskyi/rpictl/releases)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/idvoretskyi/rpictl.svg)](https://pkg.go.dev/github.com/idvoretskyi/rpictl)
+[![Go Report Card](https://goreportcard.com/badge/github.com/idvoretskyi/rpictl)](https://goreportcard.com/report/github.com/idvoretskyi/rpictl)
+
 Provisioning CLI for Raspberry Pi single-node k3s clusters.
 
 `rpictl provision rpi3` — that's all it takes to go from a fresh RPi OS Lite image to a working k3s cluster with kubeconfig on your laptop.
+
+## Status
+
+**v0.1.0 — alpha.** Core provisioning flow is complete and working. Configuration schema and CLI flags may change in minor versions until v1.0.0.
+
+Tested on: Raspberry Pi 3B, 3B+ (aarch64, RPi OS Lite Trixie).
+Best-effort defaults for RPi 4 and 5 — contributions and test reports welcome.
+
+## Why rpictl?
+
+Most Pi k3s guides are long bash scripts, Ansible playbooks, or manual steps. Tools like `k3sup` get you k3s installed but leave system hardening, memory tuning, and kubeconfig wiring as manual follow-up work.
+
+rpictl is a single compiled binary that:
+- runs a complete, ordered provisioning flow (preflight → system → hardening → memory → prereqs → k3s → kubeconfig)
+- is **idempotent** — safe to re-run after reboots or partial failures
+- requires **no agent pre-installed** on the Pi — uploads its own agent binary via SCP
+- outputs a ready-to-use kubeconfig on your laptop
+
+It stops at "kubeconfig in your hand." GitOps, secrets, ingress, and multi-node topologies are intentional non-goals — layer your own tooling on top.
 
 ## Supported devices
 
@@ -97,11 +122,21 @@ See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for build, test, and release wo
 
 ## What rpictl does NOT do
 
-- Cloudflare Tunnel setup (use OpenTofu — see [idvoretskyi/ihor.xyz](https://github.com/idvoretskyi/ihor.xyz))
+- Cloudflare Tunnel / ingress setup
 - Flux GitOps bootstrap
-- SOPS/age secret management
+- SOPS / age secret management
 - Multi-node clusters
 - Any non-Raspberry-Pi hardware
+
+These are intentional non-goals. rpictl stops at "kubeconfig in your hand." Layer your own GitOps, IaC, and secrets tooling on top.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). All commits must be signed-off (`git commit -s`) per the [Developer Certificate of Origin](https://developercertificate.org/).
+
+## Security
+
+To report a vulnerability, please use [GitHub private security advisories](https://github.com/idvoretskyi/rpictl/security/advisories/new) rather than opening a public issue. See [SECURITY.md](SECURITY.md) for details.
 
 ## License
 
