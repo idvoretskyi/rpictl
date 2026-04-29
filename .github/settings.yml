@@ -1,7 +1,7 @@
 repository:
   name: rpictl
   description: "Provisioning CLI for Raspberry Pi single-node k3s clusters"
-  private: true
+  private: false
   has_issues: true
   has_projects: false
   has_wiki: false
