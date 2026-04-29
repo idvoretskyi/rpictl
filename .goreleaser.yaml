@@ -1,0 +1,70 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - |
+      # Agent binary must be pre-built for linux/arm64 before goreleaser runs.
+      # The release workflow handles this step. For local snapshot builds:
+      # GOOS=linux GOARCH=arm64 go build -o internal/cli/agent_binary ./cmd/rpictl-agent
+
+builds:
+  - id: rpictl
+    main: ./cmd/rpictl
+    binary: rpictl
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - "-s -w -X github.com/idvoretskyi/rpictl/internal/version.Version={{.Version}}"
+
+  - id: rpictl-agent
+    main: ./cmd/rpictl-agent
+    binary: rpictl-agent
+    goos: [linux]
+    goarch: [arm64]
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - "-s -w -X github.com/idvoretskyi/rpictl/internal/version.Version={{.Version}}"
+
+archives:
+  - id: rpictl
+    builds: [rpictl]
+    name_template: "rpictl_{{.Os}}_{{.Arch}}"
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+
+  - id: rpictl-agent
+    builds: [rpictl-agent]
+    name_template: "rpictl-agent_{{.Os}}_{{.Arch}}"
+    format: tar.gz
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  github:
+    owner: idvoretskyi
+    name: rpictl
+  draft: false
+  prerelease: auto
+  name_template: "{{.Tag}}"
+
+brews:
+  - ids: [rpictl]
+    repository:
+      owner: idvoretskyi
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    name: rpictl
+    homepage: "https://github.com/idvoretskyi/rpictl"
+    description: "Provisioning CLI for Raspberry Pi single-node k3s clusters"
+    license: "Apache-2.0"
+    install: |
+      bin.install "rpictl"
+    test: |
+      system "#{bin}/rpictl version"
