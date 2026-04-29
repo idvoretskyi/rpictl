@@ -1,0 +1,22 @@
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+
+linters-settings:
+  errcheck:
+    check-type-assertions: false
+
+issues:
+  exclude-rules:
+    # InsecureIgnoreHostKey is documented; suppress the gosec warning
+    - linters: [gosec]
+      text: "G106"
+    # os/exec in agent is intentional
+    - linters: [gosec]
+      text: "G204"
