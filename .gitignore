@@ -1,0 +1,27 @@
+# Binaries
+/dist/
+rpictl
+rpictl-agent
+
+# Go
+*.test
+*.out
+coverage.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Secrets / keys
+*.age
+*.pem
+*.key
+age.key
+
+# rpictl local config (use examples/rpictl.yaml as template)
+rpictl.yaml
