@@ -1,11 +1,5 @@
 version: 2
 
-git:
-  # The agent binary is built in CI just before goreleaser runs.
-  # Exclude it from the dirty-state check.
-  dirty_state_exclude_patterns:
-    - "internal/cli/agent_binary"
-
 before:
   hooks:
     - go mod tidy
@@ -62,7 +56,7 @@ brews:
       owner: idvoretskyi
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    skip_upload: "{{ if .Env.HOMEBREW_TAP_GITHUB_TOKEN }}false{{ else }}true{{ end }}"
+    skip: "{{ if .Env.HOMEBREW_TAP_GITHUB_TOKEN }}false{{ else }}true{{ end }}"
     name: rpictl
     homepage: "https://github.com/idvoretskyi/rpictl"
     description: "Provisioning CLI for Raspberry Pi single-node k3s clusters"
