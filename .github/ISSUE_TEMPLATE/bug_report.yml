@@ -1,0 +1,48 @@
+name: Bug Report
+about: Report a bug in rpictl
+labels: ["kind/bug"]
+body:
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device tested
+      options:
+        - Raspberry Pi 3B
+        - Raspberry Pi 3B+
+        - Raspberry Pi 4
+        - Raspberry Pi 5
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS version
+      placeholder: "e.g. Raspberry Pi OS Lite, Debian 13 Trixie (2025-01-15)"
+    validations:
+      required: true
+  - type: input
+    id: rpictl_version
+    attributes:
+      label: rpictl version
+      placeholder: "e.g. v0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Include the full rpictl output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: rpictl.yaml (redact sensitive values)
+      render: yaml

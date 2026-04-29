@@ -1,0 +1,60 @@
+repository:
+  name: rpictl
+  description: "Provisioning CLI for Raspberry Pi single-node k3s clusters"
+  private: true
+  has_issues: true
+  has_projects: false
+  has_wiki: false
+  default_branch: main
+  allow_squash_merge: true
+  allow_merge_commit: false
+  allow_rebase_merge: true
+  delete_branch_on_merge: true
+
+labels:
+  - name: "area/agent"
+    color: "0075ca"
+    description: "Agent-side step logic"
+  - name: "area/cli"
+    color: "0075ca"
+    description: "Laptop-side CLI and orchestrator"
+  - name: "area/config"
+    color: "0075ca"
+    description: "Configuration schema and parsing"
+  - name: "area/ssh"
+    color: "0075ca"
+    description: "SSH/SCP transport"
+  - name: "device/rpi3"
+    color: "e4e669"
+    description: "Raspberry Pi 3B / 3B+"
+  - name: "device/rpi4"
+    color: "e4e669"
+    description: "Raspberry Pi 4"
+  - name: "device/rpi5"
+    color: "e4e669"
+    description: "Raspberry Pi 5"
+  - name: "kind/bug"
+    color: "d73a4a"
+    description: "Something isn't working"
+  - name: "kind/enhancement"
+    color: "a2eeef"
+    description: "New feature or improvement"
+  - name: "kind/docs"
+    color: "0e8a16"
+    description: "Documentation"
+  - name: "dependencies"
+    color: "0366d6"
+    description: "Dependency updates"
+
+branches:
+  - name: main
+    protection:
+      required_pull_request_reviews: null
+      required_status_checks:
+        strict: false
+        contexts: []
+      enforce_admins: false
+      restrictions: null
+      allow_force_pushes: false
+      allow_deletions: false
+      required_linear_history: true
