@@ -1,0 +1,50 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for rpictl
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! Please check existing issues before submitting.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: A clear description of the problem or limitation you're running into.
+      placeholder: "When I run rpictl provision, I have to manually do X afterwards..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like rpictl to do? How should it work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternative solutions or workarounds you've tried or considered.
+
+  - type: dropdown
+    id: device
+    attributes:
+      label: Target device (if hardware-specific)
+      options:
+        - Not hardware-specific
+        - Raspberry Pi 3B
+        - Raspberry Pi 3B+
+        - Raspberry Pi 4
+        - Raspberry Pi 5
+        - Other
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to submit a PR for this feature
