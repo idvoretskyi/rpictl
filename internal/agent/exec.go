@@ -19,7 +19,7 @@ import (
 // runCommand executes a system command and returns combined stdout.
 // Extracted so tests can substitute a mock via build tags if needed.
 func runCommand(name string, args ...string) (string, error) {
-	out, err := exec.Command(name, args...).Output() //nolint:gosec
+	out, err := exec.Command(name, args...).Output() // #nosec G204 -- agent runs as root on the Pi; commands are constructed by the trusted orchestrator
 	if err != nil {
 		return "", err
 	}
@@ -28,7 +28,7 @@ func runCommand(name string, args ...string) (string, error) {
 
 // runCommandStdin executes a command with stdin piped from the given string.
 func runCommandStdin(stdin, name string, args ...string) error {
-	cmd := exec.Command(name, args...) //nolint:gosec
+	cmd := exec.Command(name, args...) // #nosec G204 -- agent runs as root on the Pi; commands are constructed by the trusted orchestrator
 	cmd.Stdin = strings.NewReader(stdin)
 	return cmd.Run()
 }

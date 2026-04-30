@@ -31,7 +31,7 @@ func RunMemory(input StepInput) (*Result, error) {
 			return nil, fmt.Errorf("install zram-tools: %w", err)
 		}
 		zramConf := fmt.Sprintf("PERCENTAGE=%d\nPRIORITY=100\n", zramPct)
-		if err := os.WriteFile("/etc/default/zramswap", []byte(zramConf), 0644); err != nil {
+		if err := os.WriteFile("/etc/default/zramswap", []byte(zramConf), 0600); err != nil { // tightened: root-only config
 			return nil, fmt.Errorf("write zramswap config: %w", err)
 		}
 		if _, err := runCommand("systemctl", "restart", "zramswap"); err != nil {
@@ -81,7 +81,7 @@ func toInt(v interface{}) (int, bool) {
 
 // appendIfMissing appends line to file if no existing line starts with prefix.
 func appendIfMissing(path, line, prefix string) error {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is constructed from caller-controlled sysctl key against known prefix
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -90,7 +90,7 @@ func appendIfMissing(path, line, prefix string) error {
 			return nil // already set
 		}
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) // #nosec G302,G304,G306 -- /etc/sysctl.d convention (0644 required); path is constructed from caller-controlled sysctl key under known prefix
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func appendIfMissing(path, line, prefix string) error {
 // setBootConfigValue sets a key=value in /boot/firmware/config.txt,
 // replacing any existing line that starts with "key=".
 func setBootConfigValue(key, value string) error {
-	data, err := os.ReadFile(bootConfig)
+	data, err := os.ReadFile(bootConfig) // #nosec G304 -- bootConfig is a package-level constant
 	if err != nil {
 		return err
 	}
@@ -121,5 +121,5 @@ func setBootConfigValue(key, value string) error {
 		lines = append(lines, newLine)
 	}
 
-	return os.WriteFile(bootConfig, []byte(strings.Join(lines, "\n")), 0644)
+	return os.WriteFile(bootConfig, []byte(strings.Join(lines, "\n")), 0644) // #nosec G306,G703 -- /boot/firmware/config.txt convention requires 0644; path is a package-level constant
 }

@@ -114,8 +114,8 @@ func checkMarker(step, hash string) bool {
 }
 
 func writeMarker(step, hash string) {
-	if err := os.MkdirAll(markerDir, 0755); err != nil {
+	if err := os.MkdirAll(markerDir, 0750); err != nil { // tightened: local state dir, no need for world-execute
 		return
 	}
-	_ = os.WriteFile(markerPath(step), []byte(hash), 0644)
+	_ = os.WriteFile(markerPath(step), []byte(hash), 0600) // tightened: marker file contains a hash, no reason for world-read
 }

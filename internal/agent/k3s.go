@@ -55,12 +55,24 @@ func RunK3s(input StepInput) (*Result, error) {
 		return nil, fmt.Errorf("download k3s installer: %w", err)
 	}
 
-	// Write installer to temp file
-	tmpFile := "/tmp/k3s-install.sh"
-	if err := os.WriteFile(tmpFile, []byte(installer), 0755); err != nil {
+	// Write installer to a private temp file (random suffix, 0700)
+	tmpF, err := os.CreateTemp("", "k3s-install-*.sh")
+	if err != nil {
+		return nil, fmt.Errorf("create temp installer: %w", err)
+	}
+	tmpFile := tmpF.Name()
+	defer func() { _ = os.Remove(tmpFile) }()
+	if err := tmpF.Chmod(0700); err != nil { // #nosec G306 -- executable installer; kept private via random temp path
+		_ = tmpF.Close()
+		return nil, fmt.Errorf("chmod installer: %w", err)
+	}
+	if _, err := tmpF.WriteString(installer); err != nil {
+		_ = tmpF.Close()
 		return nil, fmt.Errorf("write installer: %w", err)
 	}
-	defer func() { _ = os.Remove(tmpFile) }()
+	if err := tmpF.Close(); err != nil {
+		return nil, fmt.Errorf("close installer: %w", err)
+	}
 
 	// Build INSTALL_K3S_EXEC
 	execParts := append(disableFlags, kubeletFlags...)
