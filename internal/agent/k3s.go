@@ -22,7 +22,7 @@ func RunK3s(input StepInput) (*Result, error) {
 
 	version, _ := input["version"].(string)
 	if version == "" {
-		version = "v1.31.4+k3s1"
+		version = "v1.35.4+k3s1"
 	}
 
 	disableRaw, _ := input["disable"].([]interface{})

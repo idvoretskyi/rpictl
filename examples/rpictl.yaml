@@ -14,7 +14,7 @@ hosts:
     gpu_mem: 16                     # MB; set 0 to skip (Pi 5 ignores this)
 
     k3s:
-      version: v1.31.4+k3s1
+      version: v1.35.4+k3s1
       disable:
         - traefik
         - servicelb
