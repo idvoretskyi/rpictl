@@ -26,7 +26,7 @@ hosts:
     gpu_mem: 16                   # GPU memory split in MB (Pi 5: ignored)
 
     k3s:
-      version: v1.31.4+k3s1      # k3s version to install
+      version: v1.35.4+k3s1      # k3s version to install
       disable:                    # components to disable
         - traefik
         - servicelb
