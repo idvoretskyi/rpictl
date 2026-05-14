@@ -93,7 +93,7 @@ func emitError(step string, err error) {
 		Messages: []string{err.Error()},
 	}
 	data, _ := json.Marshal(r)
-	fmt.Fprintln(os.Stderr, string(data))
+	fmt.Println(string(data))
 }
 
 func inputHash(input string) string {

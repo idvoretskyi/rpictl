@@ -14,16 +14,20 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	internalssh "github.com/idvoretskyi/rpictl/internal/ssh"
 )
 
 const remoteKubeconfigPath = "/etc/rancher/k3s/k3s.yaml"
 
+// k3sReadyTimeout is how long to wait for k3s to write its kubeconfig after install.
+const k3sReadyTimeout = 2 * time.Minute
+
 // Fetch retrieves the k3s kubeconfig from the remote host, rewrites the server
 // address to use the host's address, renames the context, and writes it to outputPath.
 func Fetch(client *internalssh.Client, hostAddress, contextName, outputPath string) error {
-	raw, err := client.MustExecSudo("cat " + remoteKubeconfigPath)
+	raw, err := waitForKubeconfig(client)
 	if err != nil {
 		return fmt.Errorf("read remote kubeconfig: %w", err)
 	}
@@ -44,8 +48,24 @@ func Fetch(client *internalssh.Client, hostAddress, contextName, outputPath stri
 	return nil
 }
 
+// waitForKubeconfig polls until k3s writes its kubeconfig (it takes a few seconds
+// to start after installation) or until k3sReadyTimeout is reached.
+func waitForKubeconfig(client *internalssh.Client) (string, error) {
+	deadline := time.Now().Add(k3sReadyTimeout)
+	for time.Now().Before(deadline) {
+		raw, err := client.MustExecSudo("cat " + remoteKubeconfigPath)
+		if err == nil && strings.TrimSpace(raw) != "" {
+			return raw, nil
+		}
+		time.Sleep(5 * time.Second)
+	}
+	return "", fmt.Errorf("k3s kubeconfig not available after %s; k3s may still be starting", k3sReadyTimeout)
+}
+
 // rewrite replaces the server address (127.0.0.1 or localhost) with the actual
 // host address, and renames the cluster/context/user to contextName.
+// hostAddress should be an IP address so that TLS SAN validation passes
+// (k3s includes the node IP in its cert SANs but not mDNS .local names).
 func rewrite(raw, hostAddress, contextName string) (string, error) {
 	out := raw
 

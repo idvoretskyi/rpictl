@@ -10,6 +10,7 @@ package agent
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -18,10 +19,10 @@ func RunSystem(input StepInput) (*Result, error) {
 	result := &Result{OK: true}
 
 	// apt-get update + upgrade
-	if _, err := runCommand("apt-get", "update", "-q"); err != nil {
+	if err := runApt("update", "-q"); err != nil {
 		return nil, fmt.Errorf("apt-get update: %w", err)
 	}
-	if _, err := runCommand("apt-get", "upgrade", "-y", "-q"); err != nil {
+	if err := runApt("upgrade", "-y", "-q"); err != nil {
 		return nil, fmt.Errorf("apt-get upgrade: %w", err)
 	}
 	result.Changed = append(result.Changed, "apt-upgrade")
@@ -46,10 +47,39 @@ func RunSystem(input StepInput) (*Result, error) {
 			if _, err := runCommand("hostnamectl", "set-hostname", hostname); err != nil {
 				return nil, fmt.Errorf("set hostname %s: %w", hostname, err)
 			}
+			// Update /etc/hosts so sudo can resolve the new hostname without warnings.
+			if err := updateHostsFile(hostname); err != nil {
+				return nil, fmt.Errorf("update /etc/hosts: %w", err)
+			}
 			result.Changed = append(result.Changed, "hostname")
 			result.Messages = append(result.Messages, fmt.Sprintf("hostname set to %s", hostname))
 		}
 	}
 
 	return result, nil
+}
+
+// updateHostsFile ensures 127.0.1.1 maps to the given hostname in /etc/hosts,
+// replacing any existing 127.0.1.1 line. This prevents sudo from printing
+// "unable to resolve host" warnings after a hostname change.
+func updateHostsFile(hostname string) error {
+	const path = "/etc/hosts"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	found := false
+	newLine := fmt.Sprintf("127.0.1.1\t%s", hostname)
+	for i, l := range lines {
+		if strings.HasPrefix(l, "127.0.1.1") {
+			lines[i] = newLine
+			found = true
+			break
+		}
+	}
+	if !found {
+		lines = append(lines, newLine)
+	}
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
 }

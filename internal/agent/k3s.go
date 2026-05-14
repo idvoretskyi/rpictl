@@ -15,6 +15,7 @@ import (
 )
 
 const k3sInstallerURL = "https://get.k3s.io"
+const cmdlinePath = "/boot/firmware/cmdline.txt"
 
 // RunK3s installs k3s via the official install script.
 func RunK3s(input StepInput) (*Result, error) {
@@ -22,7 +23,7 @@ func RunK3s(input StepInput) (*Result, error) {
 
 	version, _ := input["version"].(string)
 	if version == "" {
-		version = "v1.35.4+k3s1"
+		version = "v1.36.0+k3s1"
 	}
 
 	disableRaw, _ := input["disable"].([]interface{})
@@ -39,6 +40,23 @@ func RunK3s(input StepInput) (*Result, error) {
 		if s, ok := a.(string); ok {
 			kubeletFlags = append(kubeletFlags, "--kubelet-arg="+s)
 		}
+	}
+
+	// Ensure cgroup memory controller is enabled in the kernel cmdline.
+	// k3s requires cgroup v2 memory accounting; without this it fails to start
+	// on Raspberry Pi OS with "failed to find memory cgroup (v2)".
+	cgroupChanged, err := ensureCgroupMemory()
+	if err != nil {
+		return nil, fmt.Errorf("enable cgroup memory: %w", err)
+	}
+	if cgroupChanged {
+		result.Changed = append(result.Changed, "cgroup-memory")
+		result.Messages = append(result.Messages, "cgroup_memory=1 cgroup_enable=memory added to cmdline.txt; reboot required")
+		// Return early — k3s install must happen after the reboot.
+		// The idempotency marker is NOT written so this step re-runs after reboot.
+		result.OK = false
+		result.Messages = append(result.Messages, "REBOOT REQUIRED: run 'sudo reboot' on the Pi, then re-run rpictl provision")
+		return result, fmt.Errorf("reboot required to activate cgroup memory controller before k3s can start")
 	}
 
 	// Check if already installed at correct version
@@ -81,7 +99,7 @@ func RunK3s(input StepInput) (*Result, error) {
 	// Set environment and run
 	cmd := fmt.Sprintf("INSTALL_K3S_VERSION=%s INSTALL_K3S_EXEC=%q sh %s",
 		version, execVal, tmpFile)
-	if out, err := runCommand("sh", "-c", cmd); err != nil {
+	if out, err := runCommandCombined("sh", "-c", cmd); err != nil {
 		return nil, fmt.Errorf("k3s install: %w (output: %s)", err, out)
 	}
 
@@ -89,4 +107,39 @@ func RunK3s(input StepInput) (*Result, error) {
 	result.Messages = append(result.Messages, fmt.Sprintf("k3s %s installed", version))
 
 	return result, nil
+}
+
+// ensureCgroupMemory adds cgroup_memory=1 and cgroup_enable=memory to
+// /boot/firmware/cmdline.txt if not already present.
+// Returns true if the file was modified (reboot required).
+func ensureCgroupMemory() (bool, error) {
+	data, err := os.ReadFile(cmdlinePath)
+	if err != nil {
+		// If the file doesn't exist (e.g. on non-RPi hardware), skip silently.
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	line := strings.TrimRight(string(data), "\n")
+	changed := false
+
+	if !strings.Contains(line, "cgroup_memory=1") {
+		line += " cgroup_memory=1"
+		changed = true
+	}
+	if !strings.Contains(line, "cgroup_enable=memory") {
+		line += " cgroup_enable=memory"
+		changed = true
+	}
+
+	if !changed {
+		return false, nil
+	}
+
+	if err := os.WriteFile(cmdlinePath, []byte(line+"\n"), 0755); err != nil {
+		return false, err
+	}
+	return true, nil
 }

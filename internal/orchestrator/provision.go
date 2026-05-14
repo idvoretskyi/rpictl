@@ -13,6 +13,7 @@ package orchestrator
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,9 +96,11 @@ func Provision(hostName string, host *config.Host, agentBinary []byte, force boo
 		}
 	}
 
-	// Fetch kubeconfig
+	// Fetch kubeconfig — resolve hostname to IP so TLS SAN validation passes
+	// (k3s includes the node IP in its cert but not mDNS .local hostnames).
 	fmt.Printf("\n  Fetching kubeconfig ...\n")
-	if err := kubeconfig.Fetch(client, host.Address, host.Kubeconfig.Context, host.Kubeconfig.Output); err != nil {
+	kubeconfigAddr := resolveToIP(host.Address)
+	if err := kubeconfig.Fetch(client, kubeconfigAddr, host.Kubeconfig.Context, host.Kubeconfig.Output); err != nil {
 		return fmt.Errorf("kubeconfig: %w", err)
 	}
 	fmt.Printf("  Kubeconfig written to %s\n", host.Kubeconfig.Output)
@@ -331,6 +334,33 @@ func findConfig(explicit string) string {
 func mustHomeDir() string {
 	h, _ := os.UserHomeDir()
 	return h
+}
+
+// resolveToIP resolves a hostname to its first IPv4 address.
+// If address is already an IP or resolution fails, it is returned as-is.
+// IPv6 link-local addresses are skipped as they are not usable as kubeconfig server addresses.
+func resolveToIP(address string) string {
+	addrs, err := net.LookupHost(address)
+	if err != nil {
+		return address
+	}
+	for _, a := range addrs {
+		ip := net.ParseIP(a)
+		if ip == nil {
+			continue
+		}
+		if ip.To4() != nil {
+			return a // prefer IPv4
+		}
+	}
+	// Fall back to first non-link-local IPv6
+	for _, a := range addrs {
+		ip := net.ParseIP(a)
+		if ip != nil && !ip.IsLinkLocalUnicast() {
+			return a
+		}
+	}
+	return address
 }
 
 // FindConfig is the exported version for CLI use.
