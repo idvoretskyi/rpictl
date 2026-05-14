@@ -59,11 +59,15 @@ func RunSystem(input StepInput) (*Result, error) {
 	return result, nil
 }
 
-// updateHostsFile ensures 127.0.1.1 maps to the given hostname in /etc/hosts,
-// replacing any existing 127.0.1.1 line. This prevents sudo from printing
-// "unable to resolve host" warnings after a hostname change.
+// updateHostsFile ensures 127.0.1.1 maps to the given hostname in /etc/hosts.
 func updateHostsFile(hostname string) error {
-	const path = "/etc/hosts"
+	return updateHostsFileAt("/etc/hosts", hostname)
+}
+
+// updateHostsFileAt is the testable implementation of updateHostsFile.
+// It replaces any existing 127.0.1.1 line (or appends one) so that sudo can
+// resolve the hostname without printing "unable to resolve host" warnings.
+func updateHostsFileAt(path, hostname string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err

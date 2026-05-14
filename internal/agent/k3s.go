@@ -113,7 +113,12 @@ func RunK3s(input StepInput) (*Result, error) {
 // /boot/firmware/cmdline.txt if not already present.
 // Returns true if the file was modified (reboot required).
 func ensureCgroupMemory() (bool, error) {
-	data, err := os.ReadFile(cmdlinePath)
+	return ensureCgroupMemoryAt(cmdlinePath)
+}
+
+// ensureCgroupMemoryAt is the testable implementation of ensureCgroupMemory.
+func ensureCgroupMemoryAt(path string) (bool, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		// If the file doesn't exist (e.g. on non-RPi hardware), skip silently.
 		if os.IsNotExist(err) {
@@ -138,7 +143,7 @@ func ensureCgroupMemory() (bool, error) {
 		return false, nil
 	}
 
-	if err := os.WriteFile(cmdlinePath, []byte(line+"\n"), 0755); err != nil {
+	if err := os.WriteFile(path, []byte(line+"\n"), 0755); err != nil {
 		return false, err
 	}
 	return true, nil
