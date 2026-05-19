@@ -31,6 +31,9 @@ jobs:
             -o internal/cli/agent_binary \
             ./cmd/rpictl-agent
 
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0
+
       - name: Run goreleaser
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -39,16 +42,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          artifact-name: sbom.spdx.json
-          output-file: sbom.spdx.json
-          format: spdx-json
-
-      - name: Attach SBOM to release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${GITHUB_REF_NAME}" sbom.spdx.json --clobber
