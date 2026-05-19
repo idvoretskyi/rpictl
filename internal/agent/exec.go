@@ -30,7 +30,7 @@ func runCommand(name string, args ...string) (string, error) {
 // runCommandCombined executes a command and returns combined stdout+stderr.
 // Use this when the command writes useful output to stderr (e.g. install scripts).
 func runCommandCombined(name string, args ...string) (string, error) {
-	out, err := exec.Command(name, args...).CombinedOutput() //nolint:gosec
+	out, err := exec.Command(name, args...).CombinedOutput() // #nosec G204 -- agent runs as root on the Pi; commands are constructed by the trusted orchestrator
 	return strings.TrimSpace(string(out)), err
 }
 
@@ -38,7 +38,7 @@ func runCommandCombined(name string, args ...string) (string, error) {
 // post-install scripts that try to invoke systemctl or a tty-based frontend
 // (e.g. deb-systemd-invoke) do not fail when there is no controlling terminal.
 func runApt(args ...string) error {
-	cmd := exec.Command("apt-get", args...) //nolint:gosec
+	cmd := exec.Command("apt-get", args...) // #nosec G204 -- agent runs as root on the Pi; apt-get is a fixed binary, args are constructed by the trusted orchestrator
 	cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
 	return cmd.Run()
 }

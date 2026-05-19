@@ -68,9 +68,16 @@ func updateHostsFile(hostname string) error {
 // It replaces any existing 127.0.1.1 line (or appends one) so that sudo can
 // resolve the hostname without printing "unable to resolve host" warnings.
 func updateHostsFileAt(path, hostname string) error {
+	// #nosec G304 -- path is a fixed system file (/etc/hosts) or a test temp dir, not user-controlled
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
+	}
+	// Preserve existing file mode (typically 0644 for /etc/hosts, world-readable
+	// is required for non-root processes to resolve hostnames).
+	mode := os.FileMode(0o644)
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
 	}
 	lines := strings.Split(string(data), "\n")
 	found := false
@@ -85,5 +92,6 @@ func updateHostsFileAt(path, hostname string) error {
 	if !found {
 		lines = append(lines, newLine)
 	}
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
+	// #nosec G304 G306 G703 -- path is a fixed system file (/etc/hosts); world-readable perms are required for hostname resolution by non-root processes
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), mode)
 }

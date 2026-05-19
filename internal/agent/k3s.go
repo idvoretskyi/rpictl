@@ -118,6 +118,7 @@ func ensureCgroupMemory() (bool, error) {
 
 // ensureCgroupMemoryAt is the testable implementation of ensureCgroupMemory.
 func ensureCgroupMemoryAt(path string) (bool, error) {
+	// #nosec G304 -- path is a fixed system file (cmdline.txt) or a test temp dir, not user-controlled
 	data, err := os.ReadFile(path)
 	if err != nil {
 		// If the file doesn't exist (e.g. on non-RPi hardware), skip silently.
@@ -125,6 +126,14 @@ func ensureCgroupMemoryAt(path string) (bool, error) {
 			return false, nil
 		}
 		return false, err
+	}
+
+	// Preserve existing file mode (cmdline.txt is typically 0755 on the boot
+	// partition because it lives on a vfat filesystem that maps all files to
+	// executable; we keep whatever mode the OS gave it).
+	mode := os.FileMode(0o644)
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
 	}
 
 	line := strings.TrimRight(string(data), "\n")
@@ -143,7 +152,8 @@ func ensureCgroupMemoryAt(path string) (bool, error) {
 		return false, nil
 	}
 
-	if err := os.WriteFile(path, []byte(line+"\n"), 0755); err != nil {
+	// #nosec G304 G306 G703 -- path is a fixed system file (cmdline.txt); we preserve the existing mode set by the OS
+	if err := os.WriteFile(path, []byte(line+"\n"), mode); err != nil {
 		return false, err
 	}
 	return true, nil
