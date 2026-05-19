@@ -304,7 +304,7 @@ func FetchKubeconfig(hostName string, host *config.Host) error {
 	}
 	defer func() { _ = client.Close() }()
 
-	if err := kubeconfig.Fetch(client, host.Address, host.Kubeconfig.Context, host.Kubeconfig.Output); err != nil {
+	if err := kubeconfig.Fetch(client, resolveToIP(host.Address), host.Kubeconfig.Context, host.Kubeconfig.Output); err != nil {
 		return err
 	}
 
@@ -336,21 +336,29 @@ func mustHomeDir() string {
 	return h
 }
 
+// lookupHost is overridable so tests can inject deterministic address lists.
+var lookupHost = net.LookupHost
+
 // resolveToIP resolves a hostname to its first IPv4 address.
 // If address is already an IP or resolution fails, it is returned as-is.
 // IPv6 link-local addresses are skipped as they are not usable as kubeconfig server addresses.
 func resolveToIP(address string) string {
-	addrs, err := net.LookupHost(address)
+	// If it's already a literal IP, return as-is (covers IPv4 and IPv6 literals).
+	if ip := net.ParseIP(address); ip != nil {
+		return address
+	}
+	addrs, err := lookupHost(address)
 	if err != nil {
 		return address
 	}
+	// Prefer IPv4
 	for _, a := range addrs {
 		ip := net.ParseIP(a)
 		if ip == nil {
 			continue
 		}
 		if ip.To4() != nil {
-			return a // prefer IPv4
+			return a
 		}
 	}
 	// Fall back to first non-link-local IPv6

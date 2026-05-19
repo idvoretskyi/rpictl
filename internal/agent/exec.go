@@ -37,10 +37,16 @@ func runCommandCombined(name string, args ...string) (string, error) {
 // runApt runs an apt-get command with DEBIAN_FRONTEND=noninteractive so that
 // post-install scripts that try to invoke systemctl or a tty-based frontend
 // (e.g. deb-systemd-invoke) do not fail when there is no controlling terminal.
+// On failure, the combined stdout+stderr is included in the returned error so
+// live provisioning diagnostics are not lost.
 func runApt(args ...string) error {
 	cmd := exec.Command("apt-get", args...) // #nosec G204 -- agent runs as root on the Pi; apt-get is a fixed binary, args are constructed by the trusted orchestrator
 	cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
-	return cmd.Run()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("apt-get %s: %w (output: %s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // runCommandStdin executes a command with stdin piped from the given string.

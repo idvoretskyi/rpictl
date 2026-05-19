@@ -83,7 +83,15 @@ func updateHostsFileAt(path, hostname string) error {
 	found := false
 	newLine := fmt.Sprintf("127.0.1.1\t%s", hostname)
 	for i, l := range lines {
-		if strings.HasPrefix(l, "127.0.1.1") {
+		// Match the first whitespace-separated field exactly so we don't
+		// accidentally replace 127.0.1.10 or a commented line that happens to
+		// start with 127.0.1.1 in a longer token.
+		trimmed := strings.TrimLeft(l, " \t")
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		fields := strings.Fields(trimmed)
+		if len(fields) > 0 && fields[0] == "127.0.1.1" {
 			lines[i] = newLine
 			found = true
 			break

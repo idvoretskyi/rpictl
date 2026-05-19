@@ -36,13 +36,15 @@ func TestBytesReaderReturnsIOEOF(t *testing.T) {
 		t.Fatalf("first Read: content mismatch: got %q, want %q", buf, data)
 	}
 
-	// Next read must return exactly io.EOF.
+	// Next read must return exactly io.EOF (the sentinel value, not a wrapped
+	// error). The SSH library's stdin handling checks for the sentinel directly,
+	// so a wrapped EOF would still cause uploads to abort.
 	n2, err2 := r.Read(buf)
 	if n2 != 0 {
 		t.Errorf("read past EOF: expected 0 bytes, got %d", n2)
 	}
-	if !errors.Is(err2, io.EOF) {
-		t.Errorf("read past EOF: expected io.EOF, got %v (type %T)", err2, err2)
+	if err2 != io.EOF {
+		t.Errorf("read past EOF: expected exact io.EOF sentinel, got %v (type %T)", err2, err2)
 	}
 }
 
@@ -53,8 +55,8 @@ func TestBytesReaderEmptyData(t *testing.T) {
 	if n != 0 {
 		t.Errorf("empty reader: expected 0 bytes, got %d", n)
 	}
-	if !errors.Is(err, io.EOF) {
-		t.Errorf("empty reader: expected io.EOF, got %v", err)
+	if err != io.EOF {
+		t.Errorf("empty reader: expected exact io.EOF sentinel, got %v (type %T)", err, err)
 	}
 }
 

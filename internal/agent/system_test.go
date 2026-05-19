@@ -101,3 +101,56 @@ func TestUpdateHostsFileIdempotent(t *testing.T) {
 		t.Errorf("idempotent: expected 1 127.0.1.1 line after 3 runs, got %d:\n%s", count, content)
 	}
 }
+
+// TestUpdateHostsFileDoesNotMatchPrefix verifies that the field-based match
+// only replaces a line whose first field is exactly 127.0.1.1, never lines
+// whose first field is e.g. 127.0.1.10 — a substring-prefix bug.
+func TestUpdateHostsFileDoesNotMatchPrefix(t *testing.T) {
+	dir := t.TempDir()
+	hostsPath := filepath.Join(dir, "hosts")
+
+	initial := "127.0.0.1\tlocalhost\n127.0.1.10\tunrelated.example\n"
+	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil {
+		t.Fatalf("write hosts: %v", err)
+	}
+
+	if err := updateHostsFileAt(hostsPath, "newhostname"); err != nil {
+		t.Fatalf("updateHostsFileAt: %v", err)
+	}
+
+	data, _ := os.ReadFile(hostsPath)
+	content := string(data)
+
+	if !strings.Contains(content, "127.0.1.10\tunrelated.example") {
+		t.Errorf("127.0.1.10 line was incorrectly modified:\n%s", content)
+	}
+	if !strings.Contains(content, "127.0.1.1\tnewhostname") {
+		t.Errorf("expected new 127.0.1.1 entry to be appended, got:\n%s", content)
+	}
+}
+
+// TestUpdateHostsFileSkipsCommentedLine verifies that a commented-out
+// "#127.0.1.1 ..." entry is not treated as the active mapping.
+func TestUpdateHostsFileSkipsCommentedLine(t *testing.T) {
+	dir := t.TempDir()
+	hostsPath := filepath.Join(dir, "hosts")
+
+	initial := "127.0.0.1\tlocalhost\n# 127.0.1.1 disabled\n"
+	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil {
+		t.Fatalf("write hosts: %v", err)
+	}
+
+	if err := updateHostsFileAt(hostsPath, "newhost"); err != nil {
+		t.Fatalf("updateHostsFileAt: %v", err)
+	}
+
+	data, _ := os.ReadFile(hostsPath)
+	content := string(data)
+
+	if !strings.Contains(content, "# 127.0.1.1 disabled") {
+		t.Errorf("commented line was incorrectly modified:\n%s", content)
+	}
+	if !strings.Contains(content, "127.0.1.1\tnewhost") {
+		t.Errorf("expected new active 127.0.1.1 entry, got:\n%s", content)
+	}
+}

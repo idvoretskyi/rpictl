@@ -11,6 +11,7 @@ package kubeconfig
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,12 +67,18 @@ func waitForKubeconfig(client *internalssh.Client) (string, error) {
 // host address, and renames the cluster/context/user to contextName.
 // hostAddress should be an IP address so that TLS SAN validation passes
 // (k3s includes the node IP in its cert SANs but not mDNS .local names).
+// IPv6 literals are automatically bracketed via net.JoinHostPort.
 func rewrite(raw, hostAddress, contextName string) (string, error) {
+	// net.JoinHostPort wraps IPv6 literals in [] but leaves IPv4 / hostnames
+	// untouched, producing a valid URL authority in both cases.
+	serverAuthority := net.JoinHostPort(hostAddress, "6443")
+	serverURL := fmt.Sprintf("https://%s", serverAuthority)
+
 	out := raw
 
 	// Replace server address
-	out = strings.ReplaceAll(out, "https://127.0.0.1:6443", fmt.Sprintf("https://%s:6443", hostAddress))
-	out = strings.ReplaceAll(out, "https://localhost:6443", fmt.Sprintf("https://%s:6443", hostAddress))
+	out = strings.ReplaceAll(out, "https://127.0.0.1:6443", serverURL)
+	out = strings.ReplaceAll(out, "https://localhost:6443", serverURL)
 
 	// Rename default cluster/context/user names
 	out = strings.ReplaceAll(out, "name: default", fmt.Sprintf("name: %s", contextName))

@@ -92,24 +92,48 @@ users:
 	}
 }
 
-// TestRewriteIPv6LinkLocalNotUsedAsServer verifies that the kubeconfig server
-// address is never an IPv6 link-local (fe80::.../%) address. macOS mDNS may
-// resolve .local hostnames to link-local IPv6 addresses, which are not valid
-// in URLs and cause "invalid URL escape" errors in kubectl.
-func TestRewriteIPv6LinkLocalNotUsedAsServer(t *testing.T) {
+// TestRewriteBracketsIPv6Literal verifies that an IPv6 address passed to
+// rewrite is bracketed in the resulting URL (https://[addr]:6443). Without
+// bracketing the URL would contain stray colons and be unparseable by
+// kubectl, producing "invalid URL escape" or wrong-port errors.
+func TestRewriteBracketsIPv6Literal(t *testing.T) {
 	raw := "server: https://127.0.0.1:6443\n"
 
-	// Simulate what would happen if an IPv6 link-local slipped through.
+	out, err := rewrite(raw, "2001:db8::1", "ctx")
+	if err != nil {
+		t.Fatalf("rewrite: %v", err)
+	}
+	want := "https://[2001:db8::1]:6443"
+	if !strings.Contains(out, want) {
+		t.Errorf("expected bracketed IPv6 URL %q in output, got:\n%s", want, out)
+	}
+	// Unbracketed form must not appear.
+	if strings.Contains(out, "https://2001:db8::1:6443") {
+		t.Errorf("unbracketed IPv6 URL leaked into output:\n%s", out)
+	}
+}
+
+// TestRewriteIPv6LinkLocalProducesBracketedURL documents what happens if the
+// orchestrator's resolveToIP filter were bypassed and a link-local IPv6 reached
+// rewrite: the URL is still syntactically valid (bracketed) even though the
+// zone-id "%en0" makes the kubeconfig non-portable. The orchestrator
+// resolveToIP layer is responsible for ensuring this never happens; this test
+// guards the rewrite layer's URL-encoding behavior in isolation.
+func TestRewriteIPv6LinkLocalProducesBracketedURL(t *testing.T) {
+	raw := "server: https://127.0.0.1:6443\n"
+
 	out, err := rewrite(raw, "fe80::1%en0", "ctx")
 	if err != nil {
 		t.Fatalf("rewrite: %v", err)
 	}
-	// The rewrite itself just substitutes whatever address is given; the
-	// filtering happens in resolveToIP (orchestrator). This test documents
-	// that link-local addresses ARE escaped in the URL and would be broken.
-	if strings.Contains(out, "fe80::1%en0") {
-		// Not a test failure per se, but document the problem.
-		t.Logf("NOTE: link-local IPv6 in kubeconfig server URL: %s", out)
+	// net.JoinHostPort brackets the host; the % zone-id remains inside the
+	// brackets. We assert that the result is bracketed (no bare colons) so we
+	// at least produce a parseable URL form.
+	if !strings.Contains(out, "[fe80::1%en0]:6443") {
+		t.Errorf("expected bracketed link-local form in output, got:\n%s", out)
+	}
+	if strings.Contains(out, "https://fe80::1%en0:6443") {
+		t.Errorf("unbracketed link-local URL leaked into output:\n%s", out)
 	}
 }
 

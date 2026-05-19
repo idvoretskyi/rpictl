@@ -68,7 +68,21 @@ func Runner(stepName string, inputJSON string, fn func(input StepInput) (*Result
 
 	result, err := fn(input)
 	if err != nil {
-		emitError(stepName, err)
+		// If the step populated a structured result before returning the error,
+		// emit it so the orchestrator sees Messages/Changed (e.g. reboot guidance
+		// from RunK3s when cgroup_memory was just enabled). The marker is
+		// intentionally NOT written so the step re-runs.
+		if result != nil {
+			result.Step = stepName
+			result.OK = false
+			result.DurationMS = time.Since(start).Milliseconds()
+			if len(result.Messages) == 0 {
+				result.Messages = []string{err.Error()}
+			}
+			emitResult(result)
+		} else {
+			emitError(stepName, err)
+		}
 		os.Exit(1)
 	}
 
