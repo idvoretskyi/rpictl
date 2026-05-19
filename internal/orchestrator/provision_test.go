@@ -117,3 +117,24 @@ func TestResolveToIPLocalhostIsIPv4(t *testing.T) {
 		}
 	}
 }
+
+func TestStepFailureMessageJoinsAllMessages(t *testing.T) {
+	got := stepFailureMessage(StepResult{
+		Messages: []string{
+			"cgroup_memory=1 cgroup_enable=memory added to cmdline.txt; reboot required",
+			"REBOOT REQUIRED: run 'sudo reboot' on the Pi, then re-run rpictl provision",
+		},
+	})
+
+	want := "cgroup_memory=1 cgroup_enable=memory added to cmdline.txt; reboot required; REBOOT REQUIRED: run 'sudo reboot' on the Pi, then re-run rpictl provision"
+	if got != want {
+		t.Fatalf("stepFailureMessage() = %q, want %q", got, want)
+	}
+}
+
+func TestStepFailureMessageFallsBackToChangedDetails(t *testing.T) {
+	got := stepFailureMessage(StepResult{Changed: []string{"cgroup-memory"}})
+	if got != "changed: cgroup-memory" {
+		t.Fatalf("stepFailureMessage() = %q, want %q", got, "changed: cgroup-memory")
+	}
+}

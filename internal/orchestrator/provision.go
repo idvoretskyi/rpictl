@@ -241,12 +241,12 @@ func runStep(client *internalssh.Client, s step) error {
 	}
 
 	if !result.OK {
-		msg := ""
-		if len(result.Messages) > 0 {
-			msg = result.Messages[0]
+		fmt.Printf("  [%-12s] FAILED  (%dms)", s.name, result.DurationMS)
+		if len(result.Changed) > 0 {
+			fmt.Printf("  changed: %s", strings.Join(result.Changed, ", "))
 		}
-		fmt.Printf("  [%-12s] FAILED  (%dms)\n", s.name, result.DurationMS)
-		return fmt.Errorf("%s", msg)
+		fmt.Println()
+		return fmt.Errorf("%s", stepFailureMessage(result))
 	}
 
 	status := "done"
@@ -263,6 +263,17 @@ func runStep(client *internalssh.Client, s step) error {
 	fmt.Println()
 
 	return nil
+}
+
+func stepFailureMessage(result StepResult) string {
+	switch {
+	case len(result.Messages) > 0:
+		return strings.Join(result.Messages, "; ")
+	case len(result.Changed) > 0:
+		return "changed: " + strings.Join(result.Changed, ", ")
+	default:
+		return "step failed"
+	}
 }
 
 func uploadAgent(client *internalssh.Client, agentBinary []byte) error {
