@@ -17,6 +17,7 @@ package ssh
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	goscp "github.com/bramvdbogaerde/go-scp"
@@ -79,7 +80,7 @@ func newBytesReader(data []byte) *bytesReader {
 
 func (r *bytesReader) Read(p []byte) (int, error) {
 	if r.pos >= len(r.data) {
-		return 0, fmt.Errorf("EOF")
+		return 0, io.EOF
 	}
 	n := copy(p, r.data[r.pos:])
 	r.pos += n

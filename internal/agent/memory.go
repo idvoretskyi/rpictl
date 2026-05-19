@@ -27,18 +27,20 @@ func RunMemory(input StepInput) (*Result, error) {
 	skipGPU, _ := input["skip_gpu_mem"].(bool)
 
 	if zramPct > 0 {
-		if _, err := runCommand("apt-get", "install", "-y", "-q", "zram-tools"); err != nil {
+		if err := runApt("install", "-y", "-q", "zram-tools"); err != nil {
 			return nil, fmt.Errorf("install zram-tools: %w", err)
 		}
 		zramConf := fmt.Sprintf("PERCENTAGE=%d\nPRIORITY=100\n", zramPct)
 		if err := os.WriteFile("/etc/default/zramswap", []byte(zramConf), 0600); err != nil { // tightened: root-only config
 			return nil, fmt.Errorf("write zramswap config: %w", err)
 		}
-		if _, err := runCommand("systemctl", "restart", "zramswap"); err != nil {
-			return nil, fmt.Errorf("restart zramswap: %w", err)
-		}
+		// Best-effort: restart zramswap. The service may not be startable until
+		// the zram kernel module is loaded (i.e. after a reboot). The config is
+		// persisted above and will activate on next boot regardless.
+		_, _ = runCommand("modprobe", "zram")
+		_, _ = runCommand("systemctl", "restart", "zramswap")
 		result.Changed = append(result.Changed, "zram")
-		result.Messages = append(result.Messages, fmt.Sprintf("zram enabled at %d%%", zramPct))
+		result.Messages = append(result.Messages, fmt.Sprintf("zram enabled at %d%% (effective after reboot if service did not start)", zramPct))
 	}
 
 	// swappiness

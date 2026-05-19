@@ -50,7 +50,7 @@ func RunHardening(input StepInput) (*Result, error) {
 	if ufwEnabled {
 		// Install ufw if missing
 		if _, err := runCommand("which", "ufw"); err != nil {
-			if _, err2 := runCommand("apt-get", "install", "-y", "-q", "ufw"); err2 != nil {
+			if err2 := runApt("install", "-y", "-q", "ufw"); err2 != nil {
 				return nil, fmt.Errorf("install ufw: %w", err2)
 			}
 		}
@@ -82,7 +82,7 @@ func RunHardening(input StepInput) (*Result, error) {
 	// Unattended upgrades
 	unattended, _ := input["unattended_upgrades"].(bool)
 	if unattended {
-		if _, err := runCommand("apt-get", "install", "-y", "-q", "unattended-upgrades"); err != nil {
+		if err := runApt("install", "-y", "-q", "unattended-upgrades"); err != nil {
 			return nil, fmt.Errorf("install unattended-upgrades: %w", err)
 		}
 		conf := `APT::Periodic::Update-Package-Lists "1";

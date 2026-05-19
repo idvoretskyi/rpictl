@@ -13,6 +13,7 @@ package orchestrator
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,9 +96,11 @@ func Provision(hostName string, host *config.Host, agentBinary []byte, force boo
 		}
 	}
 
-	// Fetch kubeconfig
+	// Fetch kubeconfig — resolve hostname to IP so TLS SAN validation passes
+	// (k3s includes the node IP in its cert but not mDNS .local hostnames).
 	fmt.Printf("\n  Fetching kubeconfig ...\n")
-	if err := kubeconfig.Fetch(client, host.Address, host.Kubeconfig.Context, host.Kubeconfig.Output); err != nil {
+	kubeconfigAddr := resolveToIP(host.Address)
+	if err := kubeconfig.Fetch(client, kubeconfigAddr, host.Kubeconfig.Context, host.Kubeconfig.Output); err != nil {
 		return fmt.Errorf("kubeconfig: %w", err)
 	}
 	fmt.Printf("  Kubeconfig written to %s\n", host.Kubeconfig.Output)
@@ -238,12 +241,12 @@ func runStep(client *internalssh.Client, s step) error {
 	}
 
 	if !result.OK {
-		msg := ""
-		if len(result.Messages) > 0 {
-			msg = result.Messages[0]
+		fmt.Printf("  [%-12s] FAILED  (%dms)", s.name, result.DurationMS)
+		if len(result.Changed) > 0 {
+			fmt.Printf("  changed: %s", strings.Join(result.Changed, ", "))
 		}
-		fmt.Printf("  [%-12s] FAILED  (%dms)\n", s.name, result.DurationMS)
-		return fmt.Errorf("%s", msg)
+		fmt.Println()
+		return fmt.Errorf("%s", stepFailureMessage(result))
 	}
 
 	status := "done"
@@ -260,6 +263,17 @@ func runStep(client *internalssh.Client, s step) error {
 	fmt.Println()
 
 	return nil
+}
+
+func stepFailureMessage(result StepResult) string {
+	switch {
+	case len(result.Messages) > 0:
+		return strings.Join(result.Messages, "; ")
+	case len(result.Changed) > 0:
+		return "changed: " + strings.Join(result.Changed, ", ")
+	default:
+		return "step failed"
+	}
 }
 
 func uploadAgent(client *internalssh.Client, agentBinary []byte) error {
@@ -301,7 +315,7 @@ func FetchKubeconfig(hostName string, host *config.Host) error {
 	}
 	defer func() { _ = client.Close() }()
 
-	if err := kubeconfig.Fetch(client, host.Address, host.Kubeconfig.Context, host.Kubeconfig.Output); err != nil {
+	if err := kubeconfig.Fetch(client, resolveToIP(host.Address), host.Kubeconfig.Context, host.Kubeconfig.Output); err != nil {
 		return err
 	}
 
@@ -331,6 +345,41 @@ func findConfig(explicit string) string {
 func mustHomeDir() string {
 	h, _ := os.UserHomeDir()
 	return h
+}
+
+// lookupHost is overridable so tests can inject deterministic address lists.
+var lookupHost = net.LookupHost
+
+// resolveToIP resolves a hostname to its first IPv4 address.
+// If address is already an IP or resolution fails, it is returned as-is.
+// IPv6 link-local addresses are skipped as they are not usable as kubeconfig server addresses.
+func resolveToIP(address string) string {
+	// If it's already a literal IP, return as-is (covers IPv4 and IPv6 literals).
+	if ip := net.ParseIP(address); ip != nil {
+		return address
+	}
+	addrs, err := lookupHost(address)
+	if err != nil {
+		return address
+	}
+	// Prefer IPv4
+	for _, a := range addrs {
+		ip := net.ParseIP(a)
+		if ip == nil {
+			continue
+		}
+		if ip.To4() != nil {
+			return a
+		}
+	}
+	// Fall back to first non-link-local IPv6
+	for _, a := range addrs {
+		ip := net.ParseIP(a)
+		if ip != nil && !ip.IsLinkLocalUnicast() {
+			return a
+		}
+	}
+	return address
 }
 
 // FindConfig is the exported version for CLI use.

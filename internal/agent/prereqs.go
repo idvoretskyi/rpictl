@@ -24,12 +24,12 @@ var prereqPackages = []string{
 func RunPrereqs(input StepInput) (*Result, error) {
 	result := &Result{OK: true}
 
-	if _, err := runCommand("apt-get", "update", "-q"); err != nil {
+	if err := runApt("update", "-q"); err != nil {
 		return nil, fmt.Errorf("apt-get update: %w", err)
 	}
 
 	args := append([]string{"install", "-y", "-q"}, prereqPackages...)
-	if _, err := runCommand("apt-get", args...); err != nil {
+	if err := runApt(args...); err != nil {
 		return nil, fmt.Errorf("apt-get install prereqs: %w", err)
 	}
 
