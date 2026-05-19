@@ -78,6 +78,16 @@ rpictl provision rpi3
 4. Use your cluster:
 
 ```bash
+# By default, rpictl merges the new context into ~/.kube/config so
+# `kubectl` picks it up without setting KUBECONFIG.
+kubectl --context=rpi3 get nodes
+
+# Or make it the default context:
+kubectl config use-context rpi3
+kubectl get nodes
+
+# Prefer an isolated kubeconfig? Disable merging in rpictl.yaml
+# (kubeconfig.merge: false) and use the per-host file directly:
 export KUBECONFIG=~/.kube/rpi3.yaml
 kubectl get nodes
 ```
@@ -94,7 +104,7 @@ kubectl get nodes
 | `memory` | zram + swappiness + `gpu_mem` in `/boot/firmware/config.txt` |
 | `prereqs` | Install curl, ca-certificates, gnupg, jq, git |
 | `k3s` | Install k3s via `get.k3s.io` |
-| `kubeconfig` | Fetch `/etc/rancher/k3s/k3s.yaml`, rewrite server address, write to laptop |
+| `kubeconfig` | Fetch `/etc/rancher/k3s/k3s.yaml`, rewrite server address, write to laptop, and merge into `~/.kube/config` |
 
 Each step is **idempotent** — re-running `rpictl provision` is safe.
 

@@ -33,8 +33,11 @@ hosts:
       unattended_upgrades: true
 
     kubeconfig:
-      output: ~/.kube/rpi3.yaml     # where to write kubeconfig on laptop
+      output: ~/.kube/rpi3.yaml     # where to write the per-host kubeconfig
       context: rpi3                 # kubectl context name
+      merge: true                   # also merge into the shared kubeconfig (default: true)
+      merge_into: ~/.kube/config    # shared kubeconfig file (default: ~/.kube/config)
+      set_current: false            # set this context as current-context after merging
 
   # Example: Raspberry Pi 4 (4GB) — untested profile, best-effort defaults
   # rpi4:

@@ -86,10 +86,15 @@ type UFWConfig struct {
 	AllowSSHFrom []string `yaml:"allow_ssh_from"`
 }
 
-// KubeconfigOut holds where to write the fetched kubeconfig.
+// KubeconfigOut holds where to write the fetched kubeconfig, and how to merge
+// it into a shared kubeconfig file (typically ~/.kube/config) so the local
+// kubectl can use it without setting KUBECONFIG.
 type KubeconfigOut struct {
-	Output  string `yaml:"output"`
-	Context string `yaml:"context"`
+	Output     string `yaml:"output"`
+	Context    string `yaml:"context"`
+	Merge      *bool  `yaml:"merge"`
+	MergeInto  string `yaml:"merge_into"`
+	SetCurrent *bool  `yaml:"set_current"`
 }
 
 var validate = validator.New()
@@ -194,6 +199,17 @@ func applyDefaults(name string, h *Host) error {
 	if h.Kubeconfig.Context == "" {
 		h.Kubeconfig.Context = name
 	}
+	if h.Kubeconfig.Merge == nil {
+		t := true
+		h.Kubeconfig.Merge = &t
+	}
+	if h.Kubeconfig.MergeInto == "" {
+		h.Kubeconfig.MergeInto = "~/.kube/config"
+	}
+	if h.Kubeconfig.SetCurrent == nil {
+		f := false
+		h.Kubeconfig.SetCurrent = &f
+	}
 
 	// Expand ~ in ssh_key, known_hosts_file, and kubeconfig output
 	if h.SSHKey != "" {
@@ -215,6 +231,11 @@ func applyDefaults(name string, h *Host) error {
 		return fmt.Errorf("expand kubeconfig.output: %w", err)
 	}
 	h.Kubeconfig.Output = expanded
+	mergeInto, err := expandHome(h.Kubeconfig.MergeInto)
+	if err != nil {
+		return fmt.Errorf("expand kubeconfig.merge_into: %w", err)
+	}
+	h.Kubeconfig.MergeInto = mergeInto
 
 	return nil
 }
