@@ -58,7 +58,7 @@ goreleaser release --snapshot --clean
 
 ## Notes
 
-- License: Apache 2.0
+- License: MIT
 - All commits must be DCO signed-off: `git commit -s`
 - Target hardware: aarch64 (RPi 3B, 3B+, 4, 5)
 - Tested hardware: RPi 3B, 3B+ only (as of v0.1.0)

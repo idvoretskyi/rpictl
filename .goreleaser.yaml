@@ -57,7 +57,7 @@ release:
 #     name: rpictl
 #     homepage: "https://github.com/idvoretskyi/rpictl"
 #     description: "Provisioning CLI for Raspberry Pi single-node k3s clusters"
-#     license: "Apache-2.0"
+#     license: "MIT"
 #     install: |
 #       bin.install "rpictl"
 #     test: |
