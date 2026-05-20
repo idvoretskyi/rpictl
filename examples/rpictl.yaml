@@ -23,14 +23,60 @@ hosts:
         - eviction-hard=memory.available<100Mi
 
     hardening:
+      # Hardening level controls which layers are applied.
+      # Levels are cumulative: standard ⊇ basic; strict ⊇ standard.
+      #   off      — no hardening beyond legacy sshd config
+      #   basic    — sshd + UFW + unattended-upgrades  (default for rpi3/rpi3b-plus)
+      #   standard — basic + sysctl + fail2ban + auditd + mounts + services +
+      #              accounts + banners + NTP          (default for rpi4/rpi5)
+      #   strict   — standard + k3s CIS benchmark + AppArmor + USB lockdown
+      level: basic
+
+      # Layer 1 — SSH daemon
       ssh:
-        password_auth: false
-        permit_root_login: false
-      ufw:
+        password_auth: false        # disable password auth (key-only)
+        permit_root_login: false    # disable root SSH login
+        max_auth_tries: 3           # max failed attempts before disconnect
+
+      # Layer 2 — UFW firewall
+      firewall:
         enabled: true
         allow_ssh_from:
           - 192.168.0.0/16          # restrict SSH to local network
-      unattended_upgrades: true
+        rate_limit_ssh: false       # enable UFW rate-limit rule for SSH (standard+)
+        allow_k3s_ports: false      # open k3s API + flannel ports (standard+)
+
+      # Layer 3 — sysctl kernel hardening (standard+)
+      kernel:
+        sysctl_hardening: true      # apply CIS-recommended sysctl tweaks
+        disable_ipv6: false         # set true to disable IPv6 system-wide
+
+      # Layers 4 & 5 — fail2ban + auditd (standard+)
+      audit:
+        fail2ban: true              # install + configure fail2ban for SSH
+        auditd: true                # install auditd with minimal Pi-friendly ruleset
+
+      # Layer 6 — filesystem / mount hardening (standard+)
+      filesystem:
+        mount_hardening: true       # add nodev/nosuid/noexec to /tmp, /var/tmp, /dev/shm
+        secure_shared_memory: true  # remount /dev/shm with nosuid,noexec,nodev
+
+      # Layer 7 — disable unnecessary services (standard+)
+      services:
+        disable_bluetooth: true     # disable bluetooth (not needed for headless Pi)
+        disable_avahi: false        # disable avahi/mDNS (keep false if using .local names)
+        disable_wifi: false         # disable Wi-Fi (keep false if using Wi-Fi connectivity)
+
+      # Layers 9 & 10 — login banners + NTP (standard+, set by level defaults)
+      # (no user-settable fields beyond level selection)
+
+      # Layer 11 & 12 — Kubernetes CIS + AppArmor (strict only)
+      kubernetes:
+        cis_benchmark: false        # apply k3s CIS benchmark via /etc/rancher/k3s/config.yaml
+        apparmor_force: false       # force AppArmor on rpi3/rpi3b-plus (UNTESTED — default off)
+        usb_lockdown: false         # blacklist usb-storage kernel module
+
+      unattended_upgrades: true     # enable automatic security updates
 
     kubeconfig:
       output: ~/.kube/rpi3.yaml     # where to write the per-host kubeconfig

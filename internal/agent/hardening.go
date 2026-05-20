@@ -4,90 +4,183 @@ package agent
 
 import (
 	"fmt"
-	"os"
 )
 
-const sshdConfig = `/etc/ssh/sshd_config.d/rpictl-hardening.conf`
-
-// RunHardening applies SSH daemon hardening, UFW firewall, and unattended-upgrades.
+// RunHardening is the main hardening dispatcher. It applies layers in
+// dependency order based on the requested level:
+//
+//   off      — no-op (returns immediately)
+//   basic    — Layer 1 (SSH) + Layer 2 (UFW) + unattended-upgrades
+//   standard — basic + Layers 3–10
+//   strict   — standard + Layers 11–12
+//
+// Each layer is individually idempotent via /var/lib/rpictl/hardening-<layer>.done
+// markers. Layers 1 (SSH) and 2 (UFW) are applied last among system layers
+// because they are the only ones that can cause network lockout.
+// The caller (orchestrator) is responsible for performing an SSH liveness
+// check after RunHardening returns and triggering rollback if needed.
 func RunHardening(input StepInput) (*Result, error) {
+	level, _ := input["level"].(string)
+	if level == "off" {
+		return &Result{OK: true, Skipped: true, Messages: []string{"hardening: level=off, skipping all layers"}}, nil
+	}
+
 	result := &Result{OK: true}
 
-	// SSH hardening
-	passwordAuth, _ := input["password_auth"].(bool)
-	permitRoot, _ := input["permit_root_login"].(bool)
-
-	passwdVal := "no"
-	if passwordAuth {
-		passwdVal = "yes"
-	}
-	rootVal := "no"
-	if permitRoot {
-		rootVal = "yes"
+	// unattended-upgrades (all levels except off)
+	if c, m, err := applyUnattendedUpgrades(input); err != nil {
+		return result, fmt.Errorf("unattended-upgrades: %w", err)
+	} else {
+		result.Changed = append(result.Changed, c...)
+		result.Messages = append(result.Messages, m...)
 	}
 
-	sshdContent := fmt.Sprintf("PasswordAuthentication %s\nPermitRootLogin %s\n", passwdVal, rootVal)
-	if err := os.WriteFile(sshdConfig, []byte(sshdContent), 0600); err != nil { // tightened: sshd reads as root; 0600 is safer
-		return nil, fmt.Errorf("write sshd config: %w", err)
-	}
-	if _, err := runCommand("systemctl", "reload", "ssh"); err != nil {
-		// try sshd service name
-		if _, err2 := runCommand("systemctl", "reload", "sshd"); err2 != nil {
-			return nil, fmt.Errorf("reload sshd: %w", err)
+	// standard+ layers applied before SSH/UFW (no lockout risk)
+	if level == "standard" || level == "strict" {
+		layers := []struct {
+			name string
+			fn   func(StepInput) ([]string, []string, error)
+		}{
+			{"sysctl", applySysctlHardening},
+			{"services", applyServiceHardening},
+			{"banners", applyBannersAndJournald},
+			{"ntp", applyNTP},
+			{"fail2ban", applyFail2ban},
+			{"auditd", applyAuditd},
+			{"accounts", applyAccountHardening},
+			{"mounts", applyMountHardening},
+		}
+		for _, l := range layers {
+			c, m, err := l.fn(input)
+			if err != nil {
+				return result, fmt.Errorf("layer %s: %w", l.name, err)
+			}
+			result.Changed = append(result.Changed, c...)
+			result.Messages = append(result.Messages, m...)
 		}
 	}
-	result.Changed = append(result.Changed, "sshd-hardening")
-	result.Messages = append(result.Messages, fmt.Sprintf("sshd: PasswordAuthentication=%s PermitRootLogin=%s", passwdVal, rootVal))
 
-	// UFW
-	ufwEnabled, _ := input["ufw_enabled"].(bool)
-	if ufwEnabled {
-		// Install ufw if missing
-		if _, err := runCommand("which", "ufw"); err != nil {
-			if err2 := runApt("install", "-y", "-q", "ufw"); err2 != nil {
-				return nil, fmt.Errorf("install ufw: %w", err2)
-			}
-		}
-
-		allowFrom, _ := input["allow_ssh_from"].([]interface{})
-		if len(allowFrom) == 0 {
-			// Allow SSH from anywhere as fallback — better than locking ourselves out
-			if _, err := runCommand("ufw", "allow", "ssh"); err != nil {
-				return nil, fmt.Errorf("ufw allow ssh: %w", err)
-			}
+	// strict-only layers (applied before SSH/UFW so we don't race with lockout)
+	if level == "strict" {
+		if c, m, err := applyK3sCIS(input); err != nil {
+			return result, fmt.Errorf("layer k3s-cis: %w", err)
 		} else {
-			for _, cidr := range allowFrom {
-				cidrStr, _ := cidr.(string)
-				if cidrStr == "" {
-					continue
-				}
-				if _, err := runCommand("ufw", "allow", "from", cidrStr, "to", "any", "port", "22"); err != nil {
-					return nil, fmt.Errorf("ufw allow from %s: %w", cidrStr, err)
-				}
-			}
+			result.Changed = append(result.Changed, c...)
+			result.Messages = append(result.Messages, m...)
 		}
-		if err := runCommandStdin("y\n", "ufw", "enable"); err != nil {
-			return nil, fmt.Errorf("ufw enable: %w", err)
+		if c, m, err := applyAppArmorAndUSB(input); err != nil {
+			return result, fmt.Errorf("layer apparmor-usb: %w", err)
+		} else {
+			result.Changed = append(result.Changed, c...)
+			result.Messages = append(result.Messages, m...)
 		}
-		result.Changed = append(result.Changed, "ufw")
-		result.Messages = append(result.Messages, "UFW enabled")
 	}
 
-	// Unattended upgrades
-	unattended, _ := input["unattended_upgrades"].(bool)
-	if unattended {
-		if err := runApt("install", "-y", "-q", "unattended-upgrades"); err != nil {
-			return nil, fmt.Errorf("install unattended-upgrades: %w", err)
+	// Layer 2 — UFW (applied before SSH to ensure SSH allow rule is in place)
+	if level != "off" {
+		if c, m, err := applyFirewallHardening(input); err != nil {
+			return result, fmt.Errorf("layer firewall: %w", err)
+		} else {
+			result.Changed = append(result.Changed, c...)
+			result.Messages = append(result.Messages, m...)
 		}
-		conf := `APT::Periodic::Update-Package-Lists "1";
-APT::Periodic::Unattended-Upgrade "1";
-`
-		if err := os.WriteFile("/etc/apt/apt.conf.d/20auto-upgrades", []byte(conf), 0644); err != nil { // #nosec G306 -- apt convention requires world-readable conf.d files
-			return nil, fmt.Errorf("write auto-upgrades config: %w", err)
-		}
-		result.Changed = append(result.Changed, "unattended-upgrades")
-		result.Messages = append(result.Messages, "unattended-upgrades enabled")
+	}
+
+	// Layer 1 — SSH hardening (applied last — highest lockout risk).
+	// The orchestrator MUST run an SSH liveness check after this returns.
+	if c, m, err := applySSHHardening(input); err != nil {
+		return result, fmt.Errorf("layer ssh: %w", err)
+	} else {
+		result.Changed = append(result.Changed, c...)
+		result.Messages = append(result.Messages, m...)
 	}
 
 	return result, nil
+}
+
+// applyUnattendedUpgrades installs and enables unattended-upgrades.
+func applyUnattendedUpgrades(input StepInput) ([]string, []string, error) {
+	enabled := boolVal(boolPtr(input, "unattended_upgrades"), false)
+	if !enabled {
+		return nil, nil, nil
+	}
+
+	if err := runApt("install", "-y", "-q", "unattended-upgrades"); err != nil {
+		return nil, nil, fmt.Errorf("install unattended-upgrades: %w", err)
+	}
+
+	conf := `APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+`
+	if err := writeAtomic("/etc/apt/apt.conf.d/20auto-upgrades", conf, 0644); err != nil { // #nosec G306 -- apt convention requires world-readable conf.d files
+		return nil, nil, fmt.Errorf("write auto-upgrades config: %w", err)
+	}
+	return []string{"unattended-upgrades"}, []string{"unattended-upgrades: enabled"}, nil
+}
+
+// RunUnhardenSSH rolls back SSH hardening. Called by the orchestrator when
+// the SSH liveness check fails after RunHardening.
+func RunUnhardenSSH() error {
+	return unhardenSSH()
+}
+
+// RunUnharden reverses all hardening layers that have done-markers.
+// Called by the unharden agent operation.
+func RunUnharden(input StepInput) (*Result, error) {
+	result := &Result{OK: true}
+
+	layers := []struct {
+		name string
+		fn   func() error
+	}{
+		{"k3s-cis", unhardenK3sCIS},
+		{"apparmor-usb", unhardenAppArmorUSB},
+		{"mounts", unhardenMounts},
+		{"accounts", unhardenAccounts},
+		{"auditd", unhardenAuditd},
+		{"fail2ban", unhardenFail2ban},
+		{"banners", unhardenBanners},
+		{"ntp", unhardenNTP},
+		{"services", unhardenServices},
+		{"sysctl", unhardenSysctl},
+		{"firewall", unhardenFirewall},
+		{"ssh", unhardenSSH},
+	}
+
+	specificLayers, _ := input["layers"].([]interface{})
+	layerFilter := map[string]bool{}
+	for _, l := range specificLayers {
+		if s, ok := l.(string); ok {
+			layerFilter[s] = true
+		}
+	}
+
+	for _, l := range layers {
+		// Skip if a layer filter was specified and this layer isn't in it
+		if len(layerFilter) > 0 && !layerFilter[l.name] {
+			continue
+		}
+		// Only run if marker exists
+		if _, err := markerExists(l.name); !err {
+			continue
+		}
+		if err := l.fn(); err != nil {
+			result.Messages = append(result.Messages, fmt.Sprintf("unharden %s: %v", l.name, err))
+			// Continue: try to undo as many layers as possible
+		} else {
+			result.Changed = append(result.Changed, l.name)
+			result.Messages = append(result.Messages, fmt.Sprintf("unharden %s: done", l.name))
+		}
+	}
+
+	return result, nil
+}
+
+// markerExists returns true (as second bool) if the hardening marker for layer exists.
+func markerExists(layer string) (string, bool) {
+	path := hardeningLayerMarkerPath(layer)
+	if _, err := readFile(path); err != nil {
+		return path, false
+	}
+	return path, true
 }

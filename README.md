@@ -100,7 +100,7 @@ kubectl get nodes
 |---|---|
 | `preflight` | Verify aarch64 + Trixie + RAM ≥ 900MB; detect device model |
 | `system` | `apt upgrade` + timezone + hostname |
-| `hardening` | sshd config + UFW + unattended-upgrades |
+| `hardening` | 12-layer hardening (SSH, UFW, sysctl, fail2ban, auditd, mounts, services, accounts, banners, NTP, k3s CIS, AppArmor) — controlled by `hardening.level` |
 | `memory` | zram + swappiness + `gpu_mem` in `/boot/firmware/config.txt` |
 | `prereqs` | Install curl, ca-certificates, gnupg, jq, git |
 | `k3s` | Install k3s via `get.k3s.io` |
@@ -112,6 +112,7 @@ Each step is **idempotent** — re-running `rpictl provision` is safe.
 
 ```
 rpictl provision <host>     Run full provisioning flow
+rpictl unharden  <host>     Reverse all hardening layers
 rpictl kubeconfig <host>    Fetch kubeconfig from already-provisioned host
 rpictl version              Print version
 ```
@@ -120,7 +121,7 @@ Global flag: `--config / -c` — path to `rpictl.yaml` (default: `./rpictl.yaml`
 
 ## Configuration reference
 
-See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) and [`examples/rpictl.yaml`](examples/rpictl.yaml).
+See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md), [`docs/HARDENING.md`](docs/HARDENING.md), and [`examples/rpictl.yaml`](examples/rpictl.yaml).
 
 ## Architecture
 

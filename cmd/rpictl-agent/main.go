@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/idvoretskyi/rpictl/internal/agent"
 	"github.com/idvoretskyi/rpictl/internal/version"
+	"github.com/spf13/cobra"
 )
 
 func main() {
@@ -57,6 +57,10 @@ func newStepCmd() *cobra.Command {
 				agent.Runner(stepName, inputJSON, agent.RunSystem)
 			case "hardening":
 				agent.Runner(stepName, inputJSON, agent.RunHardening)
+			case "harden-verify":
+				agent.Runner(stepName, inputJSON, agent.RunHardenVerify)
+			case "unharden":
+				agent.Runner(stepName, inputJSON, agent.RunUnharden)
 			case "memory":
 				agent.Runner(stepName, inputJSON, agent.RunMemory)
 			case "prereqs":
@@ -64,7 +68,7 @@ func newStepCmd() *cobra.Command {
 			case "k3s":
 				agent.Runner(stepName, inputJSON, agent.RunK3s)
 			default:
-				return fmt.Errorf("unknown step %q; valid steps: preflight, system, hardening, memory, prereqs, k3s", stepName)
+				return fmt.Errorf("unknown step %q; valid steps: preflight, system, hardening, harden-verify, unharden, memory, prereqs, k3s", stepName)
 			}
 			return nil
 		},
