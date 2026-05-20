@@ -105,10 +105,23 @@ func Provision(hostName string, host *config.Host, agentBinary []byte, force boo
 	}
 	fmt.Printf("  Kubeconfig written to %s\n", host.Kubeconfig.Output)
 
+	if err := mergeKubeconfig(host); err != nil {
+		return fmt.Errorf("kubeconfig merge: %w", err)
+	}
+
 	fmt.Printf("\nProvisioning complete in %s.\n\n", time.Since(start).Round(time.Second))
 	fmt.Printf("Next steps:\n")
-	fmt.Printf("  export KUBECONFIG=%s\n", host.Kubeconfig.Output)
-	fmt.Printf("  kubectl get nodes\n\n")
+	if host.Kubeconfig.Merge != nil && *host.Kubeconfig.Merge {
+		if host.Kubeconfig.SetCurrent != nil && *host.Kubeconfig.SetCurrent {
+			fmt.Printf("  kubectl get nodes    # context %q is already active\n\n", host.Kubeconfig.Context)
+		} else {
+			fmt.Printf("  kubectl --context=%s get nodes\n", host.Kubeconfig.Context)
+			fmt.Printf("  kubectl config use-context %s    # make it the default\n\n", host.Kubeconfig.Context)
+		}
+	} else {
+		fmt.Printf("  export KUBECONFIG=%s\n", host.Kubeconfig.Output)
+		fmt.Printf("  kubectl get nodes\n\n")
+	}
 	fmt.Printf("  cd infra/cloudflare && tofu init && tofu apply\n")
 	fmt.Printf("  flux bootstrap github --owner=<owner> --repository=<repo> --branch=main --path=clusters/rpi3 --personal\n")
 
@@ -320,8 +333,33 @@ func FetchKubeconfig(hostName string, host *config.Host) error {
 	}
 
 	fmt.Printf("Kubeconfig written to %s\n", host.Kubeconfig.Output)
-	fmt.Printf("  kubectl config use-context %s\n", host.Kubeconfig.Context)
 
+	if err := mergeKubeconfig(host); err != nil {
+		return fmt.Errorf("kubeconfig merge: %w", err)
+	}
+
+	if host.Kubeconfig.Merge == nil || !*host.Kubeconfig.Merge {
+		fmt.Printf("  kubectl --kubeconfig=%s config use-context %s\n", host.Kubeconfig.Output, host.Kubeconfig.Context)
+	}
+
+	return nil
+}
+
+// mergeKubeconfig merges the per-host kubeconfig into the shared kubeconfig
+// file (typically ~/.kube/config) if host.Kubeconfig.Merge is true. It is a
+// no-op when merge is disabled.
+func mergeKubeconfig(host *config.Host) error {
+	if host.Kubeconfig.Merge == nil || !*host.Kubeconfig.Merge {
+		return nil
+	}
+	setCurrent := host.Kubeconfig.SetCurrent != nil && *host.Kubeconfig.SetCurrent
+	if err := kubeconfig.Merge(host.Kubeconfig.Output, host.Kubeconfig.MergeInto, host.Kubeconfig.Context, setCurrent); err != nil {
+		return err
+	}
+	fmt.Printf("  Merged context %q into %s\n", host.Kubeconfig.Context, host.Kubeconfig.MergeInto)
+	if setCurrent {
+		fmt.Printf("  Set current-context to %q\n", host.Kubeconfig.Context)
+	}
 	return nil
 }
 

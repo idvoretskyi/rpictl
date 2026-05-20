@@ -11,15 +11,22 @@ package cli
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"github.com/idvoretskyi/rpictl/internal/config"
 	"github.com/idvoretskyi/rpictl/internal/orchestrator"
+	"github.com/spf13/cobra"
 )
 
 func newKubeconfigCmd() *cobra.Command {
-	return &cobra.Command{
+	var (
+		merge      bool
+		noMerge    bool
+		setCurrent bool
+		mergeInto  string
+	)
+
+	cmd := &cobra.Command{
 		Use:   "kubeconfig <host>",
-		Short: "Fetch and write kubeconfig from an already-provisioned host",
+		Short: "Fetch kubeconfig from an already-provisioned host and (by default) merge it into ~/.kube/config",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			hostName := args[0]
@@ -35,7 +42,29 @@ func newKubeconfigCmd() *cobra.Command {
 				return err
 			}
 
+			// Apply CLI overrides. --no-merge takes precedence over --merge.
+			if cmd.Flags().Changed("merge") {
+				host.Kubeconfig.Merge = &merge
+			}
+			if cmd.Flags().Changed("no-merge") && noMerge {
+				f := false
+				host.Kubeconfig.Merge = &f
+			}
+			if cmd.Flags().Changed("set-current") {
+				host.Kubeconfig.SetCurrent = &setCurrent
+			}
+			if cmd.Flags().Changed("merge-into") {
+				host.Kubeconfig.MergeInto = mergeInto
+			}
+
 			return orchestrator.FetchKubeconfig(hostName, host)
 		},
 	}
+
+	cmd.Flags().BoolVar(&merge, "merge", true, "merge fetched kubeconfig into the shared kubeconfig file (default: true)")
+	cmd.Flags().BoolVar(&noMerge, "no-merge", false, "do not merge into the shared kubeconfig file")
+	cmd.Flags().BoolVar(&setCurrent, "set-current", false, "after merging, set this host's context as the current-context")
+	cmd.Flags().StringVar(&mergeInto, "merge-into", "", "shared kubeconfig file to merge into (default: ~/.kube/config)")
+
+	return cmd
 }
