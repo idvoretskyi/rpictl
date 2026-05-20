@@ -79,7 +79,11 @@ func applySysctlHardening(input StepInput) ([]string, []string, error) {
 		return nil, nil, fmt.Errorf("backup sysctl config: %w", err)
 	}
 
-	if err := os.WriteFile(sysctlHardeningPath, []byte(sysctlHardeningContent), 0644); err != nil { // #nosec G306 -- sysctl.d files are conventionally world-readable
+	safeSysctl, err := validateHardeningPath(sysctlHardeningPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validate sysctl path: %w", err)
+	}
+	if err := os.WriteFile(safeSysctl, []byte(sysctlHardeningContent), 0644); err != nil { // #nosec G306 -- sysctl.d configs must be world-readable (sysctl reads them during boot)
 		return nil, nil, fmt.Errorf("write sysctl config: %w", err)
 	}
 

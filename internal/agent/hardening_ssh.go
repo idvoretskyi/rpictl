@@ -68,8 +68,12 @@ func applySSHHardening(input StepInput) ([]string, []string, error) {
 	}
 
 	if banner {
-		// Write banner file
-		if err := os.WriteFile(sshdBannerPath, []byte(sshdBannerContent), 0644); err != nil { // #nosec G306 -- banner is world-readable; SSH requires it
+		// Write banner file — world-readable; SSH daemon reads it before privilege drop
+		safeBanner, err := validateHardeningPath(sshdBannerPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("validate banner path: %w", err)
+		}
+		if err := os.WriteFile(safeBanner, []byte(sshdBannerContent), 0644); err != nil { // #nosec G306 -- /etc/issue.net must be world-readable (sshd reads it pre-auth)
 			return nil, nil, fmt.Errorf("write banner: %w", err)
 		}
 		fmt.Fprintf(&sb, "Banner %s\n", sshdBannerPath)

@@ -40,28 +40,34 @@ func applyBannersAndJournald(input StepInput) ([]string, []string, error) {
 	var changed []string
 	var msgs []string
 
-	// /etc/motd
-	if err := backupFile(motdPath); err == nil {
-		if err := os.WriteFile(motdPath, []byte(bannerContent), 0644); err == nil { // #nosec G306 -- motd is world-readable
-			changed = append(changed, "motd")
-			msgs = append(msgs, "motd: security banner written")
+	// /etc/motd — world-readable login message of the day
+	if safeMotd, err := validateHardeningPath(motdPath); err == nil {
+		if err := backupFile(motdPath); err == nil {
+			if err := os.WriteFile(safeMotd, []byte(bannerContent), 0644); err == nil { // #nosec G306 -- /etc/motd must be world-readable
+				changed = append(changed, "motd")
+				msgs = append(msgs, "motd: security banner written")
+			}
 		}
 	}
 
-	// /etc/issue.net (referenced by sshd Banner directive in hardening_ssh.go)
-	if err := backupFile(sshdBannerPath); err == nil {
-		if err := os.WriteFile(sshdBannerPath, []byte(bannerContent), 0644); err == nil { // #nosec G306 -- issue.net is world-readable
-			changed = append(changed, "issue.net")
-			msgs = append(msgs, "issue.net: security banner written")
+	// /etc/issue.net — world-readable; referenced by sshd Banner directive
+	if safeIssue, err := validateHardeningPath(sshdBannerPath); err == nil {
+		if err := backupFile(sshdBannerPath); err == nil {
+			if err := os.WriteFile(safeIssue, []byte(bannerContent), 0644); err == nil { // #nosec G306 -- /etc/issue.net must be world-readable (sshd reads it pre-auth)
+				changed = append(changed, "issue.net")
+				msgs = append(msgs, "issue.net: security banner written")
+			}
 		}
 	}
 
-	// journald persistent logging
-	if err := os.MkdirAll("/etc/systemd/journald.conf.d", 0755); err == nil { // #nosec G301 -- systemd conf dir, 0755 standard
-		if err := os.WriteFile(journaldConfPath, []byte(journaldContent), 0644); err == nil { // #nosec G306 -- journald conf, world-readable
-			changed = append(changed, "journald")
-			msgs = append(msgs, "journald: persistent storage, 200MB max, 2-week retention")
-			_, _ = runCommand("systemctl", "restart", "systemd-journald")
+	// journald persistent logging — drop-in config, world-readable
+	if safeJournald, err := validateHardeningPath(journaldConfPath); err == nil {
+		if err := os.MkdirAll("/etc/systemd/journald.conf.d", 0755); err == nil { // #nosec G301 -- systemd drop-in dirs require 0755
+			if err := os.WriteFile(safeJournald, []byte(journaldContent), 0644); err == nil { // #nosec G306 -- journald drop-in must be world-readable
+				changed = append(changed, "journald")
+				msgs = append(msgs, "journald: persistent storage, 200MB max, 2-week retention")
+				_, _ = runCommand("systemctl", "restart", "systemd-journald")
+			}
 		}
 	}
 
@@ -91,17 +97,21 @@ func applyNTP(input StepInput) ([]string, []string, error) {
 		return nil, []string{"ntp: already applied"}, nil
 	}
 
-	timesyncdConf := "/etc/systemd/timesyncd.conf"
+	const timesyncdConf = "/etc/systemd/timesyncd.conf"
+	safeConf, err := validateHardeningPath(timesyncdConf)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validate timesyncd path: %w", err)
+	}
+
 	if err := backupFile(timesyncdConf); err != nil {
 		return nil, nil, fmt.Errorf("backup timesyncd.conf: %w", err)
 	}
 
-	content := `# Managed by rpictl — do not edit manually
-[Time]
-NTP=1.1.1.1 1.0.0.1
-FallbackNTP=0.pool.ntp.org 1.pool.ntp.org
-`
-	if err := os.WriteFile(timesyncdConf, []byte(content), 0644); err != nil { // #nosec G306 -- timesyncd.conf is world-readable
+	content := "# Managed by rpictl — do not edit manually\n" +
+		"[Time]\n" +
+		"NTP=1.1.1.1 1.0.0.1\n" +
+		"FallbackNTP=0.pool.ntp.org 1.pool.ntp.org\n"
+	if err := os.WriteFile(safeConf, []byte(content), 0644); err != nil { // #nosec G306 -- timesyncd.conf must be world-readable (systemd reads as own user)
 		return nil, nil, fmt.Errorf("write timesyncd.conf: %w", err)
 	}
 

@@ -16,8 +16,10 @@ func TestBackupFileIdempotent(t *testing.T) {
 	original := filepath.Join(dir, "test.conf")
 	bak := original + ".bak.rpictl"
 
+	allowHardeningPathForTest(original)
+
 	// Write original content
-	if err := os.WriteFile(original, []byte("original"), 0644); err != nil {
+	if err := os.WriteFile(original, []byte("original"), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatal(err)
 	}
 
@@ -26,7 +28,7 @@ func TestBackupFileIdempotent(t *testing.T) {
 		t.Fatalf("first backup: %v", err)
 	}
 	// Overwrite original
-	if err := os.WriteFile(original, []byte("modified"), 0644); err != nil {
+	if err := os.WriteFile(original, []byte("modified"), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatal(err)
 	}
 	// Second backup — should NOT overwrite the first
@@ -34,7 +36,7 @@ func TestBackupFileIdempotent(t *testing.T) {
 		t.Fatalf("second backup: %v", err)
 	}
 
-	data, err := os.ReadFile(bak)
+	data, err := os.ReadFile(bak) // #nosec G304 -- test file path from t.TempDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,21 +51,23 @@ func TestRestoreFile(t *testing.T) {
 	original := filepath.Join(dir, "test.conf")
 	bak := original + ".bak.rpictl"
 
-	if err := os.WriteFile(original, []byte("original"), 0644); err != nil {
+	allowHardeningPathForTest(original)
+
+	if err := os.WriteFile(original, []byte("original"), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatal(err)
 	}
 	if err := backupFile(original); err != nil {
 		t.Fatal(err)
 	}
 	// Overwrite
-	if err := os.WriteFile(original, []byte("modified"), 0644); err != nil {
+	if err := os.WriteFile(original, []byte("modified"), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatal(err)
 	}
 	// Restore
 	if err := restoreFile(original); err != nil {
 		t.Fatalf("restore: %v", err)
 	}
-	data, err := os.ReadFile(original)
+	data, err := os.ReadFile(original) // #nosec G304 -- test file path from t.TempDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,14 +85,16 @@ func TestWriteAtomic(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "conf")
 
+	allowHardeningPathForTest(path)
+
 	// Create with specific mode
-	if err := os.WriteFile(path, []byte("old"), 0640); err != nil {
+	if err := os.WriteFile(path, []byte("old"), 0640); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatal(err)
 	}
 	if err := writeAtomic(path, "new", 0600); err != nil {
 		t.Fatalf("writeAtomic: %v", err)
 	}
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(path) // #nosec G304 -- test file path from t.TempDir()
 	if string(data) != "new" {
 		t.Errorf("content = %q, want %q", string(data), "new")
 	}

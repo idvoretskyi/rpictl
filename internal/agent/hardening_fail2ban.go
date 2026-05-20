@@ -46,10 +46,14 @@ func applyFail2ban(input StepInput) ([]string, []string, error) {
 		return nil, nil, fmt.Errorf("backup fail2ban jail: %w", err)
 	}
 
-	if err := os.MkdirAll("/etc/fail2ban", 0755); err != nil { // #nosec G301 -- /etc/fail2ban is a package dir, 0755 is standard
+	safeJail, err := validateHardeningPath(fail2banJailLocal)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validate fail2ban path: %w", err)
+	}
+	if err := os.MkdirAll("/etc/fail2ban", 0755); err != nil { // #nosec G301 -- /etc/fail2ban requires 0755 (standard system config dir)
 		return nil, nil, fmt.Errorf("mkdir /etc/fail2ban: %w", err)
 	}
-	if err := os.WriteFile(fail2banJailLocal, []byte(fail2banJailContent), 0644); err != nil { // #nosec G306 -- fail2ban config is world-readable
+	if err := os.WriteFile(safeJail, []byte(fail2banJailContent), 0644); err != nil { // #nosec G306 -- fail2ban jail.local must be world-readable (fail2ban reads as its own user)
 		return nil, nil, fmt.Errorf("write fail2ban jail: %w", err)
 	}
 

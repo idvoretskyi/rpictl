@@ -58,13 +58,17 @@ func applyK3sCIS(input StepInput) ([]string, []string, error) {
 	}
 
 	// Write audit policy
-	if err := os.MkdirAll("/etc/rancher/k3s", 0750); err != nil { // #nosec G301 -- k3s config dir
+	if err := os.MkdirAll("/etc/rancher/k3s", 0750); err != nil {
 		return nil, nil, fmt.Errorf("mkdir /etc/rancher/k3s: %w", err)
 	}
 	if err := backupFile(k3sAuditPolicyPath); err != nil {
 		return nil, nil, fmt.Errorf("backup k3s audit policy: %w", err)
 	}
-	if err := os.WriteFile(k3sAuditPolicyPath, []byte(k3sAuditPolicy), 0640); err != nil { // #nosec G306 -- k3s config
+	safeAudit, err := validateHardeningPath(k3sAuditPolicyPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validate k3s audit policy path: %w", err)
+	}
+	if err := os.WriteFile(safeAudit, []byte(k3sAuditPolicy), 0640); err != nil { // #nosec G306 G703 -- audit policy: 0640 is standard; path validated by allowlist
 		return nil, nil, fmt.Errorf("write k3s audit policy: %w", err)
 	}
 
@@ -74,9 +78,11 @@ func applyK3sCIS(input StepInput) ([]string, []string, error) {
 	}
 
 	// Logrotate for audit log
-	if err := os.WriteFile(k3sLogrotatePath, []byte(k3sLogrotateContent), 0644); err != nil { // #nosec G306 -- logrotate conf
-		// Non-fatal
-		_ = err
+	if safeLogrotate, err := validateHardeningPath(k3sLogrotatePath); err == nil {
+		if err := os.WriteFile(safeLogrotate, []byte(k3sLogrotateContent), 0644); err != nil { // #nosec G306 -- logrotate configs must be world-readable
+			// Non-fatal
+			_ = err
+		}
 	}
 
 	// Restart k3s to pick up new config
@@ -115,9 +121,11 @@ func mergeK3sConfig() error {
 
 	// Read existing config if present
 	existing := map[string]interface{}{}
-	if data, err := os.ReadFile(k3sConfigPath); err == nil { // #nosec G304 -- known path
-		// Parse as simple YAML key:value — use our minimal parser
-		existing = parseSimpleYAML(string(data))
+	if safeK3s, err := validateHardeningPath(k3sConfigPath); err == nil {
+		if data, err := os.ReadFile(safeK3s); err == nil { // #nosec G304 -- path validated by validateHardeningPath allowlist
+			// Parse as simple YAML key:value — use our minimal parser
+			existing = parseSimpleYAML(string(data))
+		}
 	}
 
 	// Merge: only add keys not already present
@@ -129,7 +137,11 @@ func mergeK3sConfig() error {
 
 	// Write merged config
 	content := marshalSimpleYAML(existing)
-	if err := os.WriteFile(k3sConfigPath, []byte(content), 0640); err != nil { // #nosec G304 G306 -- k3s config
+	safeK3s, err := validateHardeningPath(k3sConfigPath)
+	if err != nil {
+		return fmt.Errorf("validate k3s config path: %w", err)
+	}
+	if err := os.WriteFile(safeK3s, []byte(content), 0640); err != nil { // #nosec G306 G703 -- k3s config.yaml: 0640 is standard (k3s reads as root); path validated by allowlist
 		return fmt.Errorf("write k3s config: %w", err)
 	}
 	return nil

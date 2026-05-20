@@ -65,13 +65,17 @@ func applyAuditd(input StepInput) ([]string, []string, error) {
 		return nil, nil, fmt.Errorf("install auditd: %w", err)
 	}
 
-	if err := os.MkdirAll("/etc/audit/rules.d", 0750); err != nil { // #nosec G301 -- audit dir, 0750 standard
+	if err := os.MkdirAll("/etc/audit/rules.d", 0750); err != nil {
 		return nil, nil, fmt.Errorf("mkdir audit rules: %w", err)
 	}
 	if err := backupFile(auditdRulesPath); err != nil {
 		return nil, nil, fmt.Errorf("backup audit rules: %w", err)
 	}
-	if err := os.WriteFile(auditdRulesPath, []byte(auditdRules), 0640); err != nil { // #nosec G306 -- audit rules, 0640 (root:adm)
+	safeRules, err := validateHardeningPath(auditdRulesPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validate audit rules path: %w", err)
+	}
+	if err := os.WriteFile(safeRules, []byte(auditdRules), 0640); err != nil { // #nosec G306 G703 -- audit rules: 0640 (root:root) is standard; path validated by allowlist
 		return nil, nil, fmt.Errorf("write audit rules: %w", err)
 	}
 
@@ -96,7 +100,11 @@ func applyAuditd(input StepInput) ([]string, []string, error) {
 
 // configureAuditdConf adjusts log rotation limits in auditd.conf.
 func configureAuditdConf() error {
-	data, err := os.ReadFile(auditdConfPath) // #nosec G304 -- known system path
+	safe, err := validateHardeningPath(auditdConfPath)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(safe) // #nosec G304 -- path validated by validateHardeningPath allowlist
 	if err != nil {
 		return err
 	}
@@ -105,7 +113,7 @@ func configureAuditdConf() error {
 	content = replaceOrAppendConf(content, "max_log_file", "50")
 	content = replaceOrAppendConf(content, "num_logs", "7")
 	content = replaceOrAppendConf(content, "max_log_file_action", "ROTATE")
-	return os.WriteFile(auditdConfPath, []byte(content), 0640) // #nosec G304 G306 -- auditd.conf, 0640 standard
+	return os.WriteFile(safe, []byte(content), 0640) // #nosec G306 G703 -- auditd.conf: 0640 is standard; path validated by allowlist
 }
 
 // replaceOrAppendConf updates "key = value" in content, or appends it.

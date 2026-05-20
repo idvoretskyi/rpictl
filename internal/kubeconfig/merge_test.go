@@ -65,7 +65,7 @@ func writeFile(t *testing.T, dir, name, content string) string {
 
 func loadKC(t *testing.T, path string) *kubeconfigFile {
 	t.Helper()
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- test file path from t.TempDir()
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
@@ -195,7 +195,7 @@ func TestMergePreservesDestinationFileMode(t *testing.T) {
 	dir := t.TempDir()
 	src := writeFile(t, dir, "src.yaml", sampleSrc)
 	dst := filepath.Join(dir, "config")
-	if err := os.WriteFile(dst, []byte(existingDst), 0640); err != nil {
+	if err := os.WriteFile(dst, []byte(existingDst), 0640); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatalf("write: %v", err)
 	}
 

@@ -65,7 +65,11 @@ func applyMountHardening(input StepInput) ([]string, []string, error) {
 
 // applyFstabHardening adds nodev,nosuid,noexec options to /tmp and /var/tmp.
 func applyFstabHardening() ([]string, []string, error) {
-	data, err := os.ReadFile(fstabPath) // #nosec G304 -- /etc/fstab is a known system path
+	safeFstab, err := validateHardeningPath(fstabPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validate fstab path: %w", err)
+	}
+	data, err := os.ReadFile(safeFstab) // #nosec G304 -- path validated by validateHardeningPath allowlist
 	if err != nil {
 		return nil, nil, fmt.Errorf("read fstab: %w", err)
 	}
@@ -132,11 +136,15 @@ func applyFstabHardening() ([]string, []string, error) {
 
 // applySecureShm hardens /dev/shm via a systemd mount override.
 func applySecureShm() ([]string, []string, error) {
-	if err := os.MkdirAll("/etc/systemd/system/dev-shm.mount.d", 0755); err != nil { // #nosec G301 -- systemd drop-in dir, 0755 standard
+	safeShm, err := validateHardeningPath(shmSystemdDropIn)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validate dev-shm drop-in path: %w", err)
+	}
+	if err := os.MkdirAll("/etc/systemd/system/dev-shm.mount.d", 0755); err != nil { // #nosec G301 -- systemd drop-in dirs require 0755
 		return nil, nil, fmt.Errorf("mkdir dev-shm drop-in: %w", err)
 	}
 	content := "[Mount]\nOptions=nodev,nosuid,noexec\n"
-	if err := os.WriteFile(shmSystemdDropIn, []byte(content), 0644); err != nil { // #nosec G306 -- systemd conf, world-readable
+	if err := os.WriteFile(safeShm, []byte(content), 0644); err != nil { // #nosec G306 -- systemd drop-in must be world-readable
 		return nil, nil, fmt.Errorf("write dev-shm drop-in: %w", err)
 	}
 	_, _ = runCommand("systemctl", "daemon-reload")

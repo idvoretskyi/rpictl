@@ -25,7 +25,7 @@ func TestUpdateHostsFileAddsEntry(t *testing.T) {
 	hostsPath := filepath.Join(dir, "hosts")
 
 	initial := "127.0.0.1\tlocalhost\n::1\tlocalhost\n"
-	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil {
+	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatalf("write hosts: %v", err)
 	}
 
@@ -35,7 +35,7 @@ func TestUpdateHostsFileAddsEntry(t *testing.T) {
 		t.Fatalf("updateHostsFileAt: %v", err)
 	}
 
-	data, err := os.ReadFile(hostsPath)
+	data, err := os.ReadFile(hostsPath) // #nosec G304 -- test file path from t.TempDir()
 	if err != nil {
 		t.Fatalf("read hosts: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestUpdateHostsFileReplacesExistingEntry(t *testing.T) {
 	hostsPath := filepath.Join(dir, "hosts")
 
 	initial := "127.0.0.1\tlocalhost\n127.0.1.1\toldhostname\n"
-	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil {
+	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatalf("write hosts: %v", err)
 	}
 
@@ -62,7 +62,7 @@ func TestUpdateHostsFileReplacesExistingEntry(t *testing.T) {
 		t.Fatalf("updateHostsFileAt: %v", err)
 	}
 
-	data, _ := os.ReadFile(hostsPath)
+	data, _ := os.ReadFile(hostsPath) // #nosec G304 -- test file path from t.TempDir()
 	content := string(data)
 
 	if strings.Contains(content, "oldhostname") {
@@ -83,7 +83,7 @@ func TestUpdateHostsFileIdempotent(t *testing.T) {
 	hostsPath := filepath.Join(dir, "hosts")
 
 	initial := "127.0.0.1\tlocalhost\n127.0.1.1\tsamehost\n"
-	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil {
+	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatalf("write hosts: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestUpdateHostsFileIdempotent(t *testing.T) {
 		}
 	}
 
-	data, _ := os.ReadFile(hostsPath)
+	data, _ := os.ReadFile(hostsPath) // #nosec G304 -- test file path from t.TempDir()
 	content := string(data)
 
 	count := strings.Count(content, "127.0.1.1")
@@ -110,7 +110,7 @@ func TestUpdateHostsFileDoesNotMatchPrefix(t *testing.T) {
 	hostsPath := filepath.Join(dir, "hosts")
 
 	initial := "127.0.0.1\tlocalhost\n127.0.1.10\tunrelated.example\n"
-	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil {
+	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatalf("write hosts: %v", err)
 	}
 
@@ -118,7 +118,7 @@ func TestUpdateHostsFileDoesNotMatchPrefix(t *testing.T) {
 		t.Fatalf("updateHostsFileAt: %v", err)
 	}
 
-	data, _ := os.ReadFile(hostsPath)
+	data, _ := os.ReadFile(hostsPath) // #nosec G304 -- test file path from t.TempDir()
 	content := string(data)
 
 	if !strings.Contains(content, "127.0.1.10\tunrelated.example") {
@@ -136,7 +136,7 @@ func TestUpdateHostsFileSkipsCommentedLine(t *testing.T) {
 	hostsPath := filepath.Join(dir, "hosts")
 
 	initial := "127.0.0.1\tlocalhost\n# 127.0.1.1 disabled\n"
-	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil {
+	if err := os.WriteFile(hostsPath, []byte(initial), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatalf("write hosts: %v", err)
 	}
 
@@ -144,7 +144,7 @@ func TestUpdateHostsFileSkipsCommentedLine(t *testing.T) {
 		t.Fatalf("updateHostsFileAt: %v", err)
 	}
 
-	data, _ := os.ReadFile(hostsPath)
+	data, _ := os.ReadFile(hostsPath) // #nosec G304 -- test file path from t.TempDir()
 	content := string(data)
 
 	if !strings.Contains(content, "# 127.0.1.1 disabled") {

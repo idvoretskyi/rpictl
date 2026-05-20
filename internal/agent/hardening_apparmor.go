@@ -47,8 +47,12 @@ func applyAppArmorAndUSB(input StepInput) ([]string, []string, error) {
 
 	// USB storage lockdown
 	if usbLockdown {
+		safeUSB, err := validateHardeningPath(usbLockdownPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("validate USB lockdown path: %w", err)
+		}
 		lockdownContent := "# Managed by rpictl — USB storage lockdown\nblacklist usb-storage\n"
-		if err := os.WriteFile(usbLockdownPath, []byte(lockdownContent), 0644); err != nil { // #nosec G306 -- modprobe conf, world-readable
+		if err := os.WriteFile(safeUSB, []byte(lockdownContent), 0644); err != nil { // #nosec G306 -- /etc/modprobe.d/ files must be world-readable (modprobe runs as root but reads world-readable configs)
 			return nil, nil, fmt.Errorf("write USB lockdown: %w", err)
 		}
 		// Update initramfs to apply the blacklist at boot
@@ -64,7 +68,11 @@ func applyAppArmorAndUSB(input StepInput) ([]string, []string, error) {
 // enableAppArmor appends AppArmor boot parameters to cmdline.txt and
 // sets containerd/runc profiles to enforce.
 func enableAppArmor() error {
-	data, err := os.ReadFile(appArmorCmdlinePath) // #nosec G304 -- /boot/firmware/cmdline.txt
+	safe, err := validateHardeningPath(appArmorCmdlinePath)
+	if err != nil {
+		return fmt.Errorf("validate cmdline.txt path: %w", err)
+	}
+	data, err := os.ReadFile(safe) // #nosec G304 -- path validated by validateHardeningPath allowlist
 	if err != nil {
 		return fmt.Errorf("read cmdline.txt: %w", err)
 	}
@@ -76,7 +84,9 @@ func enableAppArmor() error {
 	if !containsWord(cmdline, "apparmor=1") {
 		cmdline = trimNewline(cmdline) + " apparmor=1 security=apparmor\n"
 	}
-	if err := os.WriteFile(appArmorCmdlinePath, []byte(cmdline), 0755); err != nil { // #nosec G304 G306 -- /boot/firmware/cmdline.txt, executable bit required by bootloader
+	// /boot/firmware/cmdline.txt must be world-readable (0755) — it is read
+	// by the bootloader before any privilege separation occurs.
+	if err := os.WriteFile(safe, []byte(cmdline), 0755); err != nil { // #nosec G306 G703 -- cmdline.txt must be world-readable (bootloader reads before privilege separation); path validated by allowlist
 		return fmt.Errorf("write cmdline.txt: %w", err)
 	}
 
