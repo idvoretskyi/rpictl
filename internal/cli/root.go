@@ -34,6 +34,7 @@ OS requirement:    Raspberry Pi OS Lite, Debian 13 Trixie`,
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newProvisionCmd())
 	root.AddCommand(newKubeconfigCmd())
+	root.AddCommand(newUnhardenCmd())
 
 	return root
 }

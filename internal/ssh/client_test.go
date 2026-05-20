@@ -93,7 +93,7 @@ func TestBuildHostKeyCallback_StrictUnknownHost(t *testing.T) {
 	}
 
 	// File must remain empty — no TOFU append in strict mode.
-	data, _ := os.ReadFile(khFile)
+	data, _ := os.ReadFile(khFile) // #nosec G304 -- test file path from t.TempDir()
 	if len(strings.TrimSpace(string(data))) > 0 {
 		t.Errorf("strict mode must not append to known_hosts; got: %s", data)
 	}
@@ -114,7 +114,7 @@ func TestBuildHostKeyCallback_TOFUUnknownHostAcceptsAndPersists(t *testing.T) {
 	}
 
 	// The key must now be in the file.
-	data, err := os.ReadFile(khFile)
+	data, err := os.ReadFile(khFile) // #nosec G304 -- test file path from t.TempDir()
 	if err != nil {
 		t.Fatalf("read known_hosts: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestBuildHostKeyCallback_MismatchRejectedInTOFUMode(t *testing.T) {
 	}
 
 	// File must NOT be modified — no overwrite of an existing entry.
-	data, _ := os.ReadFile(khFile)
+	data, _ := os.ReadFile(khFile) // #nosec G304 -- test file path from t.TempDir()
 	if strings.Count(string(data), "ssh-ed25519") != 1 {
 		t.Errorf("known_hosts should still contain exactly 1 key after mismatch; got:\n%s", data)
 	}

@@ -42,6 +42,15 @@ func Provision(hostName string, host *config.Host, agentBinary []byte, force boo
 		}
 	}
 
+	// Warn on untested hardening profiles for Pi 4/5
+	if host.DeviceProfile == "rpi4" || host.DeviceProfile == "rpi5" {
+		lvl := string(host.Hardening.Level)
+		if lvl == "standard" || lvl == "strict" {
+			fmt.Printf("  WARNING: hardening level %q on %q has not been hardware-validated.\n", lvl, host.DeviceProfile)
+			fmt.Printf("  Please report results at https://github.com/idvoretskyi/rpictl/issues\n\n")
+		}
+	}
+
 	// Connect
 	fmt.Printf("  Connecting to %s ...\n", host.Address)
 	client, err := internalssh.Connect(host.Address, host.User, host.SSHKey, host.KnownHostsFile, *host.StrictHostKey)
@@ -82,11 +91,28 @@ func Provision(hostName string, host *config.Host, agentBinary []byte, force boo
 	// Build steps
 	steps := buildSteps(hostName, host, profile, force)
 
-	// Run steps
+	// Run pre-hardening steps
 	start := time.Now()
-	for _, step := range steps {
-		if err := runStep(client, step); err != nil {
-			return fmt.Errorf("step %s: %w", step.name, err)
+	for _, s := range steps {
+		if err := runStep(client, s); err != nil {
+			return fmt.Errorf("step %s: %w", s.name, err)
+		}
+		// After hardening step: perform SSH liveness check + auto-rollback if needed
+		if s.name == "hardening" && host.Hardening.Level != "off" {
+			if err := sshLivenessCheck(host, client); err != nil {
+				return err
+			}
+		}
+	}
+
+	// harden-verify
+	if host.Hardening.Level != "off" {
+		reportPath, err := runHardenVerify(client, host)
+		if err != nil {
+			// Non-fatal: log and continue
+			fmt.Printf("  [harden-verify] WARNING: %v\n", err)
+		} else if reportPath != "" {
+			fmt.Printf("  [harden-verify] report written to %s\n", reportPath)
 		}
 	}
 
@@ -119,6 +145,185 @@ func Provision(hostName string, host *config.Host, agentBinary []byte, force boo
 	fmt.Printf("  cd infra/cloudflare && tofu init && tofu apply\n")
 	fmt.Printf("  flux bootstrap github --owner=<owner> --repository=<repo> --branch=main --path=clusters/rpi3 --personal\n")
 
+	return nil
+}
+
+// sshLivenessCheck opens a NEW SSH connection to the host to verify SSH is
+// still reachable after hardening. On failure, it sends a rollback command
+// over the original (still-open) client connection and returns an error.
+// This protects against accidental SSH lockout.
+func sshLivenessCheck(host *config.Host, originalClient *internalssh.Client) error {
+	fmt.Printf("  [ssh-liveness ] checking SSH reachability post-hardening ...\r")
+
+	deadline := time.Now().Add(30 * time.Second)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		testClient, err := internalssh.Connect(
+			host.Address, host.User, host.SSHKey, host.KnownHostsFile, *host.StrictHostKey,
+		)
+		if err == nil {
+			_ = testClient.Close()
+			fmt.Printf("  [ssh-liveness ] ok                                              \n")
+			return nil
+		}
+		lastErr = err
+		time.Sleep(2 * time.Second)
+	}
+
+	// Liveness check failed — attempt rollback over original connection
+	fmt.Printf("\n  *** SSH liveness check FAILED after hardening: %v\n", lastErr)
+	fmt.Printf("  *** Attempting automatic SSH rollback ...\n")
+
+	rollbackCmd := fmt.Sprintf("sudo %s step unharden --input=%q",
+		remoteAgentPath, `{"layers":["ssh"]}`)
+	_, rollbackErr := originalClient.Exec(rollbackCmd)
+	if rollbackErr != nil {
+		// Dual failure — emit recovery instructions
+		fmt.Fprintf(os.Stderr, "\n")
+		fmt.Fprintf(os.Stderr, "*** HARDENING ROLLBACK FAILED — DEVICE MAY BE UNREACHABLE ***\n")
+		fmt.Fprintf(os.Stderr, "SSH liveness check failed: %v\n", lastErr)
+		fmt.Fprintf(os.Stderr, "Rollback attempt failed: %v\n", rollbackErr)
+		fmt.Fprintf(os.Stderr, "\nManual recovery steps:\n")
+		fmt.Fprintf(os.Stderr, "  1. Connect a keyboard + monitor to the Pi, or mount the SD card on another machine\n")
+		fmt.Fprintf(os.Stderr, "  2. Restore: for f in $(find /etc -name '*.bak.rpictl' 2>/dev/null); do cp \"$f\" \"${f%%.bak.rpictl}\"; done\n")
+		fmt.Fprintf(os.Stderr, "  3. Remove rpictl sshd config: rm -f /etc/ssh/sshd_config.d/rpictl-hardening.conf\n")
+		fmt.Fprintf(os.Stderr, "  4. Run: systemctl reload ssh\n")
+		fmt.Fprintf(os.Stderr, "  5. Or simply reboot: the original sshd config will be restored\n")
+		writeRecoveryJSON(host.Address, lastErr, rollbackErr)
+		return fmt.Errorf("SSH lockout: liveness check failed (%v) AND rollback failed (%v); see recovery instructions above", lastErr, rollbackErr)
+	}
+
+	fmt.Printf("  *** SSH rollback succeeded — SSH hardening has been reverted\n")
+	return fmt.Errorf("SSH liveness check failed after hardening (%v); SSH hardening was automatically rolled back. "+
+		"Review your hardening.ssh config (allowed_users, port, cipher restrictions) and re-run provision", lastErr)
+}
+
+// writeRecoveryJSON writes a recovery info file to the user's data dir.
+func writeRecoveryJSON(host string, livenessErr, rollbackErr error) {
+	dir := hardeningReportDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return
+	}
+	ts := time.Now().UTC().Format("2006-01-02T15-04-05")
+	path := filepath.Join(dir, fmt.Sprintf("%s-recovery-%s.json", sanitizeFilename(host), ts))
+	content := fmt.Sprintf(`{"host":%q,"timestamp":%q,"liveness_error":%q,"rollback_error":%q,"recovery_steps":["connect keyboard+monitor","restore .bak.rpictl files","rm /etc/ssh/sshd_config.d/rpictl-hardening.conf","systemctl reload ssh"]}`,
+		host, ts, livenessErr.Error(), rollbackErr.Error())
+	_ = os.WriteFile(path, []byte(content), 0600)
+	fmt.Fprintf(os.Stderr, "  Recovery info written to %s\n", path)
+}
+
+// runHardenVerify runs the harden-verify agent step and writes the JSON report.
+func runHardenVerify(client *internalssh.Client, host *config.Host) (string, error) {
+	level := string(host.Hardening.Level)
+	disableBT := false
+	if host.Hardening.Services.DisableBluetooth != nil {
+		disableBT = *host.Hardening.Services.DisableBluetooth
+	}
+
+	input := map[string]interface{}{
+		"level":             level,
+		"disable_bluetooth": disableBT,
+	}
+	s := step{name: "harden-verify", input: input}
+
+	fmt.Printf("  [harden-verify] running ...\r")
+	if err := runStep(client, s); err != nil {
+		return "", err
+	}
+
+	// Re-run to get the raw result for the report
+	inputJSON, _ := json.Marshal(input)
+	cmd := fmt.Sprintf("sudo %s step harden-verify --input=%q", remoteAgentPath, string(inputJSON))
+	res, err := client.Exec(cmd)
+	if err != nil {
+		return "", nil // already logged by runStep above, skip report
+	}
+
+	var result StepResult
+	if err := json.Unmarshal([]byte(res.Stdout), &result); err != nil {
+		return "", nil
+	}
+
+	// Write report
+	if len(result.Messages) > 0 {
+		return writeHardeningReport(host.Address, result.Messages[0])
+	}
+	return "", nil
+}
+
+// writeHardeningReport writes the JSON verification report to the local disk.
+func writeHardeningReport(host, reportJSON string) (string, error) {
+	dir := hardeningReportDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", fmt.Errorf("mkdir report dir: %w", err)
+	}
+	ts := time.Now().UTC().Format("2006-01-02T15-04-05")
+	path := filepath.Join(dir, fmt.Sprintf("%s-hardening-%s.json", sanitizeFilename(host), ts))
+	if err := os.WriteFile(path, []byte(reportJSON), 0600); err != nil {
+		return "", fmt.Errorf("write report: %w", err)
+	}
+	return path, nil
+}
+
+// hardeningReportDir returns the XDG data home path for rpictl reports.
+func hardeningReportDir() string {
+	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
+		return filepath.Join(xdg, "rpictl")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "share", "rpictl")
+}
+
+// sanitizeFilename replaces characters not safe for filenames.
+func sanitizeFilename(s string) string {
+	var b strings.Builder
+	for _, c := range s {
+		if c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|' {
+			b.WriteRune('_')
+		} else {
+			b.WriteRune(c)
+		}
+	}
+	return b.String()
+}
+
+// Unharden connects to a host and reverses applied hardening layers.
+func Unharden(hostName string, host *config.Host, agentBinary []byte, layers []string) error {
+	fmt.Printf("Unhardening host %q (%s@%s)\n\n", hostName, host.User, host.Address)
+
+	client, err := internalssh.Connect(host.Address, host.User, host.SSHKey, host.KnownHostsFile, *host.StrictHostKey)
+	if err != nil {
+		return fmt.Errorf("connect: %w", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	// Ensure agent is current
+	if err := uploadAgent(client, agentBinary); err != nil {
+		return fmt.Errorf("upload agent: %w", err)
+	}
+
+	layerList := make([]interface{}, len(layers))
+	for i, l := range layers {
+		layerList[i] = l
+	}
+	s := step{
+		name:  "unharden",
+		input: map[string]interface{}{"layers": layerList},
+	}
+	if err := runStep(client, s); err != nil {
+		return fmt.Errorf("unharden: %w", err)
+	}
+
+	// SSH liveness check post-unharden
+	fmt.Printf("  Verifying SSH still reachable ...\n")
+	testClient, err := internalssh.Connect(host.Address, host.User, host.SSHKey, host.KnownHostsFile, *host.StrictHostKey)
+	if err != nil {
+		return fmt.Errorf("unharden completed but SSH liveness check failed: %w", err)
+	}
+	_ = testClient.Close()
+
+	fmt.Printf("  SSH liveness check passed.\n")
+	fmt.Printf("\nUnharden complete.\n")
 	return nil
 }
 
@@ -155,11 +360,6 @@ func buildSteps(hostName string, host *config.Host, profile *config.Profile, for
 		kubeletArgs = []string{"eviction-hard=" + profile.EvictionHard}
 	}
 
-	allowSSHFrom := make([]interface{}, len(host.Hardening.UFW.AllowSSHFrom))
-	for i, v := range host.Hardening.UFW.AllowSSHFrom {
-		allowSSHFrom[i] = v
-	}
-
 	disableList := make([]interface{}, len(host.K3s.Disable))
 	for i, v := range host.K3s.Disable {
 		disableList[i] = v
@@ -169,6 +369,16 @@ func buildSteps(hostName string, host *config.Host, profile *config.Profile, for
 		kubeletList[i] = v
 	}
 
+	allowSSHFrom := make([]interface{}, len(host.Hardening.Firewall.AllowSSHFrom))
+	for i, v := range host.Hardening.Firewall.AllowSSHFrom {
+		allowSSHFrom[i] = v
+	}
+
+	allowUsers := make([]interface{}, len(host.Hardening.SSH.AllowUsers))
+	for i, v := range host.Hardening.SSH.AllowUsers {
+		allowUsers[i] = v
+	}
+
 	passwordAuth := false
 	if host.Hardening.SSH.PasswordAuth != nil {
 		passwordAuth = *host.Hardening.SSH.PasswordAuth
@@ -176,6 +386,74 @@ func buildSteps(hostName string, host *config.Host, profile *config.Profile, for
 	permitRoot := false
 	if host.Hardening.SSH.PermitRootLogin != nil {
 		permitRoot = *host.Hardening.SSH.PermitRootLogin
+	}
+	maxAuthTries := 3
+	if host.Hardening.SSH.MaxAuthTries != nil {
+		maxAuthTries = *host.Hardening.SSH.MaxAuthTries
+	}
+	ufwEnabled := false
+	if host.Hardening.Firewall.Enabled != nil {
+		ufwEnabled = *host.Hardening.Firewall.Enabled
+	}
+	rateLimitSSH := false
+	if host.Hardening.Firewall.RateLimitSSH != nil {
+		rateLimitSSH = *host.Hardening.Firewall.RateLimitSSH
+	}
+	allowK3sPorts := false
+	if host.Hardening.Firewall.AllowK3sPorts != nil {
+		allowK3sPorts = *host.Hardening.Firewall.AllowK3sPorts
+	}
+	unattendedUpgrades := false
+	if host.Hardening.UnattendedUpgrades != nil {
+		unattendedUpgrades = *host.Hardening.UnattendedUpgrades
+	}
+	sysctlHardening := false
+	if host.Hardening.Kernel.SysctlHardening != nil {
+		sysctlHardening = *host.Hardening.Kernel.SysctlHardening
+	}
+	fail2ban := false
+	if host.Hardening.Audit.Fail2ban != nil {
+		fail2ban = *host.Hardening.Audit.Fail2ban
+	}
+	auditd := false
+	if host.Hardening.Audit.Auditd != nil {
+		auditd = *host.Hardening.Audit.Auditd
+	}
+	disableBT := false
+	if host.Hardening.Services.DisableBluetooth != nil {
+		disableBT = *host.Hardening.Services.DisableBluetooth
+	}
+	disableAvahi := false
+	if host.Hardening.Services.DisableAvahi != nil {
+		disableAvahi = *host.Hardening.Services.DisableAvahi
+	}
+	disableWifi := false
+	if host.Hardening.Services.DisableWifi != nil {
+		disableWifi = *host.Hardening.Services.DisableWifi
+	}
+	mountHardening := false
+	if host.Hardening.Filesystem.MountHardening != nil {
+		mountHardening = *host.Hardening.Filesystem.MountHardening
+	}
+	secureShm := false
+	if host.Hardening.Filesystem.SecureSharedMemory != nil {
+		secureShm = *host.Hardening.Filesystem.SecureSharedMemory
+	}
+	isStandardPlus := host.Hardening.Level == config.HardeningStandard || host.Hardening.Level == config.HardeningStrict
+	accountHardening := isStandardPlus
+	banners := isStandardPlus
+	ntp := isStandardPlus
+	cisBenchmark := false
+	if host.Hardening.Kubernetes.CISBenchmark != nil {
+		cisBenchmark = *host.Hardening.Kubernetes.CISBenchmark
+	}
+	appArmorForce := false
+	if host.Hardening.Kubernetes.AppArmorForce != nil {
+		appArmorForce = *host.Hardening.Kubernetes.AppArmorForce
+	}
+	usbLockdown := false
+	if host.Hardening.Kubernetes.USBLockdown != nil {
+		usbLockdown = *host.Hardening.Kubernetes.USBLockdown
 	}
 
 	return []step{
@@ -195,11 +473,33 @@ func buildSteps(hostName string, host *config.Host, profile *config.Profile, for
 		{
 			name: "hardening",
 			input: map[string]interface{}{
+				"level":               string(host.Hardening.Level),
 				"password_auth":       passwordAuth,
 				"permit_root_login":   permitRoot,
-				"ufw_enabled":         host.Hardening.UFW.Enabled,
+				"max_auth_tries":      maxAuthTries,
+				"allow_users":         allowUsers,
+				"ufw_enabled":         ufwEnabled,
 				"allow_ssh_from":      allowSSHFrom,
-				"unattended_upgrades": host.Hardening.UnattendedUpgrades,
+				"rate_limit_ssh":      rateLimitSSH,
+				"allow_k3s_ports":     allowK3sPorts,
+				"unattended_upgrades": unattendedUpgrades,
+				"sysctl_hardening":    sysctlHardening,
+				"fail2ban":            fail2ban,
+				"auditd":              auditd,
+				"disable_bluetooth":   disableBT,
+				"disable_avahi":       disableAvahi,
+				"disable_wifi":        disableWifi,
+				"mount_hardening":     mountHardening,
+				"secure_shared_memory": secureShm,
+				"account_hardening":   accountHardening,
+				"user":                host.User,
+				"banners":             banners,
+				"ntp":                 ntp,
+				"cis_benchmark":       cisBenchmark,
+				"apparmor_force":      appArmorForce,
+				"usb_lockdown":        usbLockdown,
+				"device_profile":      host.DeviceProfile,
+				"banner":              banners, // SSH banner also follows banners flag
 			},
 		},
 		{
@@ -233,7 +533,7 @@ func runStep(client *internalssh.Client, s step) error {
 	}
 
 	cmd := fmt.Sprintf("sudo %s step %s --input=%q", remoteAgentPath, s.name, string(inputJSON))
-	fmt.Printf("  [%-12s] running ...\r", s.name)
+	fmt.Printf("  [%-14s] running ...\r", s.name)
 
 	res, err := client.Exec(cmd)
 	if err != nil {
@@ -248,7 +548,7 @@ func runStep(client *internalssh.Client, s step) error {
 	}
 
 	if !result.OK {
-		fmt.Printf("  [%-12s] FAILED  (%dms)", s.name, result.DurationMS)
+		fmt.Printf("  [%-14s] FAILED  (%dms)", s.name, result.DurationMS)
 		if len(result.Changed) > 0 {
 			fmt.Printf("  changed: %s", strings.Join(result.Changed, ", "))
 		}
@@ -263,7 +563,7 @@ func runStep(client *internalssh.Client, s step) error {
 		status = "changed"
 	}
 
-	fmt.Printf("  [%-12s] %-8s (%dms)", s.name, status, result.DurationMS)
+	fmt.Printf("  [%-14s] %-8s (%dms)", s.name, status, result.DurationMS)
 	if len(result.Changed) > 0 {
 		fmt.Printf("  changed: %s", strings.Join(result.Changed, ", "))
 	}
@@ -340,8 +640,7 @@ func FetchKubeconfig(hostName string, host *config.Host) error {
 }
 
 // mergeKubeconfig merges the per-host kubeconfig into the shared kubeconfig
-// file (typically ~/.kube/config) if host.Kubeconfig.Merge is true. It is a
-// no-op when merge is disabled.
+// file (typically ~/.kube/config) if host.Kubeconfig.Merge is true.
 func mergeKubeconfig(host *config.Host) error {
 	if host.Kubeconfig.Merge == nil || !*host.Kubeconfig.Merge {
 		return nil

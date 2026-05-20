@@ -23,7 +23,7 @@ func TestEnsureCgroupMemoryAddsParams(t *testing.T) {
 	path := filepath.Join(dir, "cmdline.txt")
 
 	initial := "console=serial0,115200 console=tty1 root=PARTUUID=abc rootfstype=ext4 rootwait\n"
-	if err := os.WriteFile(path, []byte(initial), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(initial), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatalf("write cmdline: %v", err)
 	}
 
@@ -35,7 +35,7 @@ func TestEnsureCgroupMemoryAddsParams(t *testing.T) {
 		t.Error("expected changed=true when params are absent")
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(path) // #nosec G304 -- test file path from t.TempDir()
 	content := string(data)
 	if !strings.Contains(content, "cgroup_memory=1") {
 		t.Errorf("cgroup_memory=1 not found in cmdline.txt:\n%s", content)
@@ -50,7 +50,7 @@ func TestEnsureCgroupMemoryIdempotent(t *testing.T) {
 	path := filepath.Join(dir, "cmdline.txt")
 
 	initial := "console=tty1 root=PARTUUID=abc cgroup_memory=1 cgroup_enable=memory rootwait\n"
-	if err := os.WriteFile(path, []byte(initial), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(initial), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatalf("write cmdline: %v", err)
 	}
 
@@ -63,7 +63,7 @@ func TestEnsureCgroupMemoryIdempotent(t *testing.T) {
 	}
 
 	// File content must not change.
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(path) // #nosec G304 -- test file path from t.TempDir()
 	if string(data) != initial {
 		t.Errorf("file should be unchanged; got:\n%s\nwant:\n%s", data, initial)
 	}
@@ -90,7 +90,7 @@ func TestEnsureCgroupMemoryOnlyAddsMissingParam(t *testing.T) {
 
 	// Only cgroup_memory=1 is present; cgroup_enable=memory is missing.
 	initial := "console=tty1 cgroup_memory=1 rootwait\n"
-	if err := os.WriteFile(path, []byte(initial), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(initial), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatalf("write cmdline: %v", err)
 	}
 
@@ -102,7 +102,7 @@ func TestEnsureCgroupMemoryOnlyAddsMissingParam(t *testing.T) {
 		t.Error("expected changed=true when cgroup_enable=memory is absent")
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(path) // #nosec G304 -- test file path from t.TempDir()
 	content := string(data)
 	if !strings.Contains(content, "cgroup_enable=memory") {
 		t.Errorf("cgroup_enable=memory not added:\n%s", content)
@@ -118,7 +118,7 @@ func TestEnsureCgroupMemoryPreservesExistingContent(t *testing.T) {
 	path := filepath.Join(dir, "cmdline.txt")
 
 	initial := "console=serial0,115200 console=tty1 root=PARTUUID=573ee8d8-02 rootfstype=ext4 fsck.repair=yes rootwait\n"
-	if err := os.WriteFile(path, []byte(initial), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(initial), 0644); err != nil { // #nosec G306 -- test file in t.TempDir()
 		t.Fatalf("write cmdline: %v", err)
 	}
 
@@ -127,7 +127,7 @@ func TestEnsureCgroupMemoryPreservesExistingContent(t *testing.T) {
 		t.Fatalf("ensureCgroupMemoryAt: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(path) // #nosec G304 -- test file path from t.TempDir()
 	content := string(data)
 
 	// All original parameters must still be present.
