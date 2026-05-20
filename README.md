@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/idvoretskyi/rpictl/actions/workflows/ci.yml/badge.svg)](https://github.com/idvoretskyi/rpictl/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/idvoretskyi/rpictl?sort=semver)](https://github.com/idvoretskyi/rpictl/releases)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/idvoretskyi/rpictl.svg)](https://pkg.go.dev/github.com/idvoretskyi/rpictl)
 [![Go Report Card](https://goreportcard.com/badge/github.com/idvoretskyi/rpictl)](https://goreportcard.com/report/github.com/idvoretskyi/rpictl)
 
@@ -154,4 +154,4 @@ Every GitHub release ships a per-artifact SPDX-JSON SBOM (`<artifact>.sbom.spdx.
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE).
+MIT License — see [LICENSE](LICENSE).
