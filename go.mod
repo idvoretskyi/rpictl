@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/bramvdbogaerde/go-scp v1.6.0
-	github.com/go-playground/validator/v10 v10.30.2
+	github.com/go-playground/validator/v10 v10.30.3
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.52.0
 	gopkg.in/yaml.v3 v3.0.1
