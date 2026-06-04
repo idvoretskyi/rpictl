@@ -70,7 +70,7 @@ jobs:
       - name: Run Gitleaks
         # gitleaks-action v2 does not yet support Node 24; this will be updated
         # when upstream releases a Node 24 compatible version.
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
