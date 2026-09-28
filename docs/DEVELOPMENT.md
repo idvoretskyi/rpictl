@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.23+
+- Go 1.26+
 - `golangci-lint` (`brew install golangci-lint`)
 - `goreleaser` v2 (`brew install goreleaser`)
 

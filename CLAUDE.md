@@ -4,7 +4,7 @@ Raspberry Pi provisioning CLI — single-node k3s clusters.
 
 ## Stack
 
-- **Go 1.23+**: module at `github.com/idvoretskyi/rpictl`
+- **Go 1.26+**: module at `github.com/idvoretskyi/rpictl`
 - **cobra**: CLI framework (`cmd/rpictl/`)
 - **golang.org/x/crypto/ssh**: SSH transport
 - **go-scp**: SCP file upload
