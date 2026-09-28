@@ -1,0 +1,5 @@
+# GO-2026-5932: golang.org/x/crypto/openpgp is deprecated/unmaintained.
+# This advisory has no fixed version and is reported at the module level.
+# rpictl only imports golang.org/x/crypto/ssh (+ ssh/agent, ssh/knownhosts);
+# the openpgp package is never imported (verify: go list -deps ./... | grep openpgp).
+GO-2026-5932
