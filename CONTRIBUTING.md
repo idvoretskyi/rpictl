@@ -25,7 +25,7 @@ go build ./...
 go test ./...
 ```
 
-Requirements: Go 1.25+, `golangci-lint` (see docs/DEVELOPMENT.md for exact versions).
+Requirements: Go 1.26+, `golangci-lint` (see docs/DEVELOPMENT.md for exact versions).
 
 ## Submitting a Pull Request
 
